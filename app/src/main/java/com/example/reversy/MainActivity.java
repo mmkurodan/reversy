@@ -26,12 +26,22 @@ public class MainActivity extends Activity {
 
         initBoard();
 
+        // 画面幅をセルサイズに使い、縦横の長さを揃える（正方形マス）
+        int cellSize = getResources().getDisplayMetrics().widthPixels / SIZE;
+
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {
                 Button btn = new Button(this);
                 btn.setMinHeight(0);
                 btn.setMinimumHeight(0);
                 btn.setPadding(0, 0, 0, 0);
+
+                GridLayout.LayoutParams params = new GridLayout.LayoutParams(
+                        GridLayout.spec(y), GridLayout.spec(x));
+                params.width = cellSize;
+                params.height = cellSize;
+                params.setMargins(1, 1, 1, 1);
+                btn.setLayoutParams(params);
 
                 final int fx = x;
                 final int fy = y;
@@ -67,9 +77,9 @@ public class MainActivity extends Activity {
         }
 
         placeStone(x, y, 1);
-        currentPlayer = 2;
         updateBoardUI();
 
+        currentPlayer = 2;
         handleTurn();
     }
 
@@ -87,7 +97,7 @@ public class MainActivity extends Activity {
 
             // 両者置けない → 終了
             if (!hasValidMove(currentPlayer)) {
-                Toast.makeText(this, "両者置けず、ゲーム終了", Toast.LENGTH_LONG).show();
+                showGameResult();
                 return;
             }
         }
@@ -123,9 +133,9 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "CPU が置きました", Toast.LENGTH_SHORT).show();
         }
 
-        currentPlayer = 1;
         updateBoardUI();
 
+        currentPlayer = 1;
         handleTurn();
     }
 
@@ -253,6 +263,7 @@ public class MainActivity extends Activity {
                 if (v == 0) {
                     // 空セルは緑（ボード）
                     btn.setBackgroundColor(Color.parseColor("#006400")); // 濃い緑
+                    btn.setEnabled(currentPlayer == 1 && canPlace(x, y, 1)); // 人間が置ける場所だけ有効に
                 } else {
                     GradientDrawable circle = new GradientDrawable();
                     circle.setShape(GradientDrawable.OVAL);
@@ -264,8 +275,45 @@ public class MainActivity extends Activity {
                         circle.setStroke(2, Color.BLACK); // 枠をつけて見えるようにする
                     }
                     btn.setBackground(circle);
+                    btn.setEnabled(false);
                 }
             }
         }
+    }
+
+    // -------------------------
+    // ゲーム終了時の勝敗判定と表示
+    // -------------------------
+    private void showGameResult() {
+        int black = 0;
+        int white = 0;
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (board[y][x] == 1) black++;
+                else if (board[y][x] == 2) white++;
+            }
+        }
+
+        String winner;
+        if (black > white) {
+            winner = "黒の勝ち！";
+        } else if (white > black) {
+            winner = "白の勝ち！";
+        } else {
+            winner = "引き分け";
+        }
+
+        String msg = "ゲーム終了: 黒 " + black + " - 白 " + white + " → " + winner;
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+
+        // 全ボタンを無効化して入力を止める
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (cells[y][x] != null) cells[y][x].setEnabled(false);
+            }
+        }
+
+        // currentPlayer を 0 にしてゲーム終了状態を示す
+        currentPlayer = 0;
     }
 }
