@@ -133,9 +133,10 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "CPU が置きました", Toast.LENGTH_SHORT).show();
         }
 
+        // currentPlayer を先に戻してから UI を更新する（重要）
+        currentPlayer = 1;
         updateBoardUI();
 
-        currentPlayer = 1;
         handleTurn();
     }
 
