@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     }
 
     private void initBoard() {
+        // 初期配置
         board[3][3] = 2;
         board[4][4] = 2;
         board[3][4] = 1;
@@ -144,6 +145,8 @@ public class MainActivity extends Activity {
     // 反転できる枚数を数える（CPU 用）
     // -------------------------
     private int countFlips(int x, int y, int player) {
+        if (board[y][x] != 0) return 0;
+
         int opponent = (player == 1) ? 2 : 1;
         int total = 0;
 
@@ -247,99 +250,20 @@ public class MainActivity extends Activity {
                 Button btn = cells[y][x];
                 int v = board[y][x];
 
-                GradientDrawable circle = new GradientDrawable();
-                circle.setShape(GradientDrawable.OVAL);
-
-                if (v == 1) {
-                    circle.setColor(Color.BLACK);
-                } else if (v == 2) {
-                    circle.setColor(Color.WHITE);
+                if (v == 0) {
+                    // 空セルは緑（ボード）
+                    btn.setBackgroundColor(Color.parseColor("#006400")); // 濃い緑
                 } else {
-                    circle.setColor(Color.GREEN);
-                }
-
-                btn.setBackground(circle);
-            }
-        }
-    }
-}        updateBoardUI();
-    }
-
-    private boolean canPlace(int x, int y, int player) {
-        if (board[y][x] != 0) return false;
-
-        int opponent = (player == 1) ? 2 : 1;
-
-        int[] dx = {-1,0,1,-1,1,-1,0,1};
-        int[] dy = {-1,-1,-1,0,0,1,1,1};
-
-        for (int d = 0; d < 8; d++) {
-            int cx = x + dx[d];
-            int cy = y + dy[d];
-            boolean foundOpponent = false;
-
-            while (cx >= 0 && cx < SIZE && cy >= 0 && cy < SIZE) {
-                if (board[cy][cx] == opponent) {
-                    foundOpponent = true;
-                } else if (board[cy][cx] == player) {
-                    if (foundOpponent) return true;
-                    break;
-                } else break;
-
-                cx += dx[d];
-                cy += dy[d];
-            }
-        }
-        return false;
-    }
-
-    private void placeStone(int x, int y, int player) {
-        board[y][x] = player;
-        int opponent = (player == 1) ? 2 : 1;
-
-        int[] dx = {-1,0,1,-1,1,-1,0,1};
-        int[] dy = {-1,-1,-1,0,0,1,1,1};
-
-        for (int d = 0; d < 8; d++) {
-            int cx = x + dx[d];
-            int cy = y + dy[d];
-            boolean foundOpponent = false;
-
-            while (cx >= 0 && cx < SIZE && cy >= 0 && cy < SIZE) {
-                if (board[cy][cx] == opponent) {
-                    foundOpponent = true;
-                } else if (board[cy][cx] == player) {
-                    if (foundOpponent) {
-                        // 反転処理
-                        int rx = x + dx[d];
-                        int ry = y + dy[d];
-                        while (board[ry][rx] == opponent) {
-                            board[ry][rx] = player;
-                            rx += dx[d];
-                            ry += dy[d];
-                        }
+                    GradientDrawable circle = new GradientDrawable();
+                    circle.setShape(GradientDrawable.OVAL);
+                    if (v == 1) {
+                        circle.setColor(Color.BLACK);
+                        circle.setStroke(2, Color.BLACK);
+                    } else { // 白
+                        circle.setColor(Color.WHITE);
+                        circle.setStroke(2, Color.BLACK); // 枠をつけて見えるようにする
                     }
-                    break;
-                } else break;
-
-                cx += dx[d];
-                cy += dy[d];
-            }
-        }
-    }
-
-    private void updateBoardUI() {
-        for (int y = 0; y < SIZE; y++) {
-            for (int x = 0; x < SIZE; x++) {
-                Button btn = cells[y][x];
-                int v = board[y][x];
-
-                if (v == 1) {
-                    btn.setBackgroundColor(Color.BLACK);
-                } else if (v == 2) {
-                    btn.setBackgroundColor(Color.WHITE);
-                } else {
-                    btn.setBackgroundColor(Color.GREEN);
+                    btn.setBackground(circle);
                 }
             }
         }
