@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.GridLayout;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
@@ -16,9 +17,52 @@ public class MainActivity extends Activity {
     private int[][] board = new int[SIZE][SIZE]; // 0=空, 1=黒(人間), 2=白(CPU)
     private int currentPlayer = 1; // 黒スタート（人間）
 
+    // game mode & difficulty
+    // 1 = two-player, 2 = vs CPU
+    private int gameMode = 2;
+    private int simDepth = 1; // lookahead depth in plies
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Root layout
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+
+        // Controls row
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button modeBtn = new Button(this);
+        modeBtn.setText(gameMode == 2 ? "対戦: CPU" : "対戦: 2人");
+        modeBtn.setOnClickListener(v -> {
+            gameMode = (gameMode == 2) ? 1 : 2;
+            modeBtn.setText(gameMode == 2 ? "対戦: CPU" : "対戦: 2人");
+            resetGame();
+            Toast.makeText(this, gameMode == 2 ? "CPU対戦に切替" : "2人対戦に切替", Toast.LENGTH_SHORT).show();
+        });
+
+        Button depthBtn = new Button(this);
+        depthBtn.setText("難易度: " + simDepth);
+        depthBtn.setOnClickListener(v -> {
+            simDepth = (simDepth % 4) + 1; // cycle 1..4
+            depthBtn.setText("難易度: " + simDepth);
+            Toast.makeText(this, "シミュレーション深さ: " + simDepth, Toast.LENGTH_SHORT).show();
+        });
+
+        Button resetBtn = new Button(this);
+        resetBtn.setText("リセット");
+        resetBtn.setOnClickListener(v -> {
+            resetGame();
+            Toast.makeText(this, "ゲームをリセットしました", Toast.LENGTH_SHORT).show();
+        });
+
+        controls.addView(modeBtn);
+        controls.addView(depthBtn);
+        controls.addView(resetBtn);
+
+        root.addView(controls);
 
         GridLayout grid = new GridLayout(this);
         grid.setColumnCount(SIZE);
@@ -54,33 +98,70 @@ public class MainActivity extends Activity {
         }
 
         updateBoardUI();
-        setContentView(grid);
+        root.addView(grid);
+        setContentView(root);
     }
 
     private void initBoard() {
-        // 初期配置
+        // clear board
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                board[y][x] = 0;
+            }
+        }
+        // initial positions
         board[3][3] = 2;
         board[4][4] = 2;
         board[3][4] = 1;
         board[4][3] = 1;
+        currentPlayer = 1;
+    }
+
+    private void resetGame() {
+        initBoard();
+        updateBoardUI();
     }
 
     // -------------------------
-    // 人間の手
+    // 人間の手（2人 or CPU）
     // -------------------------
     private void onHumanMove(int x, int y) {
-        if (currentPlayer != 1) return;
+        if (gameMode == 2) {
+            if (currentPlayer != 1) return; // only human (黒) moves
+        } else {
+            // two-player: both players can tap
+        }
 
-        if (!canPlace(x, y, 1)) {
+        int player = currentPlayer;
+
+        if (!canPlace(x, y, player)) {
             Toast.makeText(this, "そこには置けません", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        placeStone(x, y, 1);
+        placeStone(x, y, player);
         updateBoardUI();
 
-        currentPlayer = 2;
-        handleTurn();
+        // switch player
+        if (gameMode == 1) {
+            currentPlayer = (currentPlayer == 1) ? 2 : 1;
+            // pass/endgame handling
+            if (!hasValidMove(currentPlayer)) {
+                Toast.makeText(this,
+                        (currentPlayer == 1 ? "黒" : "白") + "は置ける場所がありません（パス）",
+                        Toast.LENGTH_SHORT).show();
+
+                currentPlayer = (currentPlayer == 1) ? 2 : 1;
+                if (!hasValidMove(currentPlayer)) {
+                    showGameResult();
+                    return;
+                }
+            }
+        } else {
+            // vs CPU
+            currentPlayer = 2;
+            handleTurn();
+        }
     }
 
     // -------------------------
@@ -102,35 +183,22 @@ public class MainActivity extends Activity {
             }
         }
 
-        // CPU の番なら CPU を動かす
-        if (currentPlayer == 2) {
+        // CPU の番なら CPU を動かす（ただし CPU モードのみ）
+        if (gameMode == 2 && currentPlayer == 2) {
             cpuMove();
         }
     }
 
     // -------------------------
-    // CPU の手（貪欲法）
+    // CPU の手（深さ指定ミニマックス）
     // -------------------------
     private void cpuMove() {
-        int bestX = -1, bestY = -1;
-        int bestScore = -1;
-
-        for (int y = 0; y < SIZE; y++) {
-            for (int x = 0; x < SIZE; x++) {
-                if (canPlace(x, y, 2)) {
-                    int score = countFlips(x, y, 2);
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestX = x;
-                        bestY = y;
-                    }
-                }
-            }
-        }
-
-        if (bestX != -1) {
-            placeStone(bestX, bestY, 2);
+        int[] best = findBestMoveSim(2, simDepth);
+        if (best != null) {
+            placeStone(best[0], best[1], 2);
             Toast.makeText(this, "CPU が置きました", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "CPU はパスしました", Toast.LENGTH_SHORT).show();
         }
 
         // currentPlayer を先に戻してから UI を更新する（重要）
@@ -140,8 +208,194 @@ public class MainActivity extends Activity {
         handleTurn();
     }
 
+    // Find best move by simulating up to depth plies (minimax)
+    private int[] findBestMoveSim(int player, int depth) {
+        int bestX = -1, bestY = -1;
+        int bestScore = Integer.MIN_VALUE;
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (canPlace(x, y, player)) {
+                    int[][] copy = cloneBoard(board);
+                    placeStoneOnBoard(copy, x, y, player);
+                    int score = minimax(copy, (player == 1) ? 2 : 1, depth - 1, player);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestX = x;
+                        bestY = y;
+                    }
+                }
+            }
+        }
+        if (bestX != -1) return new int[]{bestX, bestY};
+        return null;
+    }
+
+    private int minimax(int[][] b, int player, int depth, int maximizingPlayer) {
+        int opponent = (player == 1) ? 2 : 1;
+
+        boolean playerHas = hasValidMoveOnBoard(b, player);
+        boolean opponentHas = hasValidMoveOnBoard(b, opponent);
+
+        if (depth <= 0 || (!playerHas && !opponentHas)) {
+            return evaluateBoard(b, maximizingPlayer);
+        }
+
+        if (!playerHas) {
+            // pass turn (consume a ply)
+            return minimax(b, opponent, depth - 1, maximizingPlayer);
+        }
+
+        if (player == maximizingPlayer) {
+            int maxVal = Integer.MIN_VALUE;
+            for (int y = 0; y < SIZE; y++) {
+                for (int x = 0; x < SIZE; x++) {
+                    if (canPlaceOnBoard(b, x, y, player)) {
+                        int[][] copy = cloneBoard(b);
+                        placeStoneOnBoard(copy, x, y, player);
+                        int val = minimax(copy, opponent, depth - 1, maximizingPlayer);
+                        if (val > maxVal) maxVal = val;
+                    }
+                }
+            }
+            return maxVal;
+        } else {
+            int minVal = Integer.MAX_VALUE;
+            for (int y = 0; y < SIZE; y++) {
+                for (int x = 0; x < SIZE; x++) {
+                    if (canPlaceOnBoard(b, x, y, player)) {
+                        int[][] copy = cloneBoard(b);
+                        placeStoneOnBoard(copy, x, y, player);
+                        int val = minimax(copy, opponent, depth - 1, maximizingPlayer);
+                        if (val < minVal) minVal = val;
+                    }
+                }
+            }
+            return minVal;
+        }
+    }
+
+    private int evaluateBoard(int[][] b, int player) {
+        int me = 0, opp = 0;
+        int opponent = (player == 1) ? 2 : 1;
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (b[y][x] == player) me++;
+                else if (b[y][x] == opponent) opp++;
+            }
+        }
+        return me - opp;
+    }
+
+    private int[][] cloneBoard(int[][] src) {
+        int[][] d = new int[SIZE][SIZE];
+        for (int y = 0; y < SIZE; y++) {
+            System.arraycopy(src[y], 0, d[y], 0, SIZE);
+        }
+        return d;
+    }
+
+    private boolean hasValidMoveOnBoard(int[][] b, int player) {
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (canPlaceOnBoard(b, x, y, player)) return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean canPlaceOnBoard(int[][] b, int x, int y, int player) {
+        if (b[y][x] != 0) return false;
+
+        int opponent = (player == 1) ? 2 : 1;
+
+        int[] dx = {-1,0,1,-1,1,-1,0,1};
+        int[] dy = {-1,-1,-1,0,0,1,1,1};
+
+        for (int d = 0; d < 8; d++) {
+            int cx = x + dx[d];
+            int cy = y + dy[d];
+            boolean foundOpponent = false;
+
+            while (cx >= 0 && cx < SIZE && cy >= 0 && cy < SIZE) {
+                if (b[cy][cx] == opponent) {
+                    foundOpponent = true;
+                } else if (b[cy][cx] == player) {
+                    if (foundOpponent) return true;
+                    break;
+                } else break;
+
+                cx += dx[d];
+                cy += dy[d];
+            }
+        }
+        return false;
+    }
+
+    private int countFlipsOnBoard(int[][] b, int x, int y, int player) {
+        if (b[y][x] != 0) return 0;
+
+        int opponent = (player == 1) ? 2 : 1;
+        int total = 0;
+
+        int[] dx = {-1,0,1,-1,1,-1,0,1};
+        int[] dy = {-1,-1,-1,0,0,1,1,1};
+
+        for (int d = 0; d < 8; d++) {
+            int cx = x + dx[d];
+            int cy = y + dy[d];
+            int count = 0;
+
+            while (cx >= 0 && cx < SIZE && cy >= 0 && cy < SIZE) {
+                if (b[cy][cx] == opponent) {
+                    count++;
+                } else if (b[cy][cx] == player) {
+                    total += count;
+                    break;
+                } else break;
+
+                cx += dx[d];
+                cy += dy[d];
+            }
+        }
+        return total;
+    }
+
+    private void placeStoneOnBoard(int[][] b, int x, int y, int player) {
+        b[y][x] = player;
+        int opponent = (player == 1) ? 2 : 1;
+
+        int[] dx = {-1,0,1,-1,1,-1,0,1};
+        int[] dy = {-1,-1,-1,0,0,1,1,1};
+
+        for (int d = 0; d < 8; d++) {
+            int cx = x + dx[d];
+            int cy = y + dy[d];
+            boolean foundOpponent = false;
+
+            while (cx >= 0 && cx < SIZE && cy >= 0 && cy < SIZE) {
+                if (b[cy][cx] == opponent) {
+                    foundOpponent = true;
+                } else if (b[cy][cx] == player) {
+                    if (foundOpponent) {
+                        int rx = x + dx[d];
+                        int ry = y + dy[d];
+                        while (b[ry][rx] == opponent) {
+                            b[ry][rx] = player;
+                            rx += dx[d];
+                            ry += dy[d];
+                        }
+                    }
+                    break;
+                } else break;
+
+                cx += dx[d];
+                cy += dy[d];
+            }
+        }
+    }
+
     // -------------------------
-    // 置ける場所があるか？
+    // 既存の board 操作
     // -------------------------
     private boolean hasValidMove(int player) {
         for (int y = 0; y < SIZE; y++) {
@@ -152,9 +406,6 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    // -------------------------
-    // 反転できる枚数を数える（CPU 用）
-    // -------------------------
     private int countFlips(int x, int y, int player) {
         if (board[y][x] != 0) return 0;
 
@@ -184,9 +435,6 @@ public class MainActivity extends Activity {
         return total;
     }
 
-    // -------------------------
-    // 置けるか判定
-    // -------------------------
     private boolean canPlace(int x, int y, int player) {
         if (board[y][x] != 0) return false;
 
@@ -215,9 +463,6 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    // -------------------------
-    // 石を置いて反転
-    // -------------------------
     private void placeStone(int x, int y, int player) {
         board[y][x] = player;
         int opponent = (player == 1) ? 2 : 1;
@@ -252,9 +497,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // -------------------------
-    // UI 更新（丸石）
-    // -------------------------
     private void updateBoardUI() {
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {
@@ -264,7 +506,7 @@ public class MainActivity extends Activity {
                 if (v == 0) {
                     // 空セルは緑（ボード）
                     btn.setBackgroundColor(Color.parseColor("#006400")); // 濃い緑
-                    btn.setEnabled(currentPlayer == 1 && canPlace(x, y, 1)); // 人間が置ける場所だけ有効に
+                    btn.setEnabled((gameMode == 1) ? canPlace(x, y, currentPlayer) : (currentPlayer == 1 && canPlace(x, y, 1)));
                 } else {
                     GradientDrawable circle = new GradientDrawable();
                     circle.setShape(GradientDrawable.OVAL);
@@ -282,9 +524,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // -------------------------
-    // ゲーム終了時の勝敗判定と表示
-    // -------------------------
     private void showGameResult() {
         int black = 0;
         int white = 0;
