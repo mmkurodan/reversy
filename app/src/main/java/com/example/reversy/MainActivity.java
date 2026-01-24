@@ -10,7 +10,10 @@ import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
+import android.widget.TextView;
+
 public class MainActivity extends Activity {
+    private TextView turnView;
 
     private static final int SIZE = 8;
     private Button[][] cells = new Button[SIZE][SIZE];
@@ -33,6 +36,10 @@ public class MainActivity extends Activity {
         // Controls row
         LinearLayout controls = new LinearLayout(this);
         controls.setOrientation(LinearLayout.HORIZONTAL);
+
+        turnView = new TextView(this);
+        turnView.setText("ターン: 黒");
+        controls.addView(turnView);
 
         Button modeBtn = new Button(this);
         modeBtn.setText(gameMode == 2 ? "対戦: CPU" : "対戦: 2人");
@@ -498,6 +505,16 @@ public class MainActivity extends Activity {
     }
 
     private void updateBoardUI() {
+        // ターン表示を更新
+        if (turnView != null) {
+            if (currentPlayer == 1) {
+                turnView.setText("ターン: 黒");
+            } else if (currentPlayer == 2) {
+                turnView.setText("ターン: 白");
+            } else {
+                turnView.setText("ゲーム終了");
+            }
+        }
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {
                 Button btn = cells[y][x];
