@@ -153,14 +153,12 @@ public class MainActivity extends Activity {
             currentPlayer = (currentPlayer == 1) ? 2 : 1;
             updateBoardUI();
             // pass/endgame handling
-            currentPlayer = (currentPlayer == 1) ? 2 : 1;
-            // pass/endgame handling
             if (!hasValidMove(currentPlayer)) {
                 Toast.makeText(this,
                         (currentPlayer == 1 ? "黒" : "白") + "は置ける場所がありません（パス）",
                         Toast.LENGTH_SHORT).show();
-
                 currentPlayer = (currentPlayer == 1) ? 2 : 1;
+                updateBoardUI();
                 if (!hasValidMove(currentPlayer)) {
                     showGameResult();
                     return;
