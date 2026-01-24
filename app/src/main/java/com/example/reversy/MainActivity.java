@@ -200,19 +200,28 @@ public class MainActivity extends Activity {
     // CPU の手（深さ指定ミニマックス）
     // -------------------------
     private void cpuMove() {
-        int[] best = findBestMoveSim(2, simDepth);
-        if (best != null) {
-            placeStone(best[0], best[1], 2);
-            Toast.makeText(this, "CPU が置きました", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(this, "CPU はパスしました", Toast.LENGTH_SHORT).show();
+        // 思考中表示
+        if (turnView != null) {
+            turnView.setText("CPU思考中...");
         }
-
-        // currentPlayer を先に戻してから UI を更新する（重要）
-        currentPlayer = 1;
         updateBoardUI();
 
-        handleTurn();
+        // シミュレーションは別スレッドで実行し、UI更新はメインスレッドで行う
+        new Thread(() -> {
+            int[] best = findBestMoveSim(2, simDepth);
+            runOnUiThread(() -> {
+                if (best != null) {
+                    placeStone(best[0], best[1], 2);
+                    Toast.makeText(this, "CPU が置きました", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "CPU はパスしました", Toast.LENGTH_SHORT).show();
+                }
+                // currentPlayer を先に戻してから UI を更新する（重要）
+                currentPlayer = 1;
+                updateBoardUI();
+                handleTurn();
+            });
+        }).start();
     }
 
     // Find best move by simulating up to depth plies (minimax)
