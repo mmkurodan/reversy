@@ -506,7 +506,8 @@ public class MainActivity extends Activity {
                 if (v == 0) {
                     // 空セルは緑（ボード）
                     btn.setBackgroundColor(Color.parseColor("#006400")); // 濃い緑
-                    btn.setEnabled((gameMode == 1) ? canPlace(x, y, currentPlayer) : (currentPlayer == 1 && canPlace(x, y, 1))); // 2人対戦時はcurrentPlayerで判定 // 2人対戦時はcurrentPlayerで判定
+                    btn.setEnabled((gameMode == 1) ? canPlace(x, y, currentPlayer) : (currentPlayer == 1 && canPlace(x, y, 1))); // 2人対戦時はcurrentPlayerで判定
+// 修正: 2人対戦時はcurrentPlayerで判定し、白番でも置けるようにする
                 } else {
                     GradientDrawable circle = new GradientDrawable();
                     circle.setShape(GradientDrawable.OVAL);
