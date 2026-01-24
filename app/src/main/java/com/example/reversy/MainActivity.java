@@ -46,7 +46,7 @@ public class MainActivity extends Activity {
         Button depthBtn = new Button(this);
         depthBtn.setText("難易度: " + simDepth);
         depthBtn.setOnClickListener(v -> {
-            simDepth = (simDepth % 4) + 1; // cycle 1..4
+            simDepth = (simDepth % 10) + 1; // cycle 1..10
             depthBtn.setText("難易度: " + simDepth);
             Toast.makeText(this, "シミュレーション深さ: " + simDepth, Toast.LENGTH_SHORT).show();
         });
@@ -506,7 +506,7 @@ public class MainActivity extends Activity {
                 if (v == 0) {
                     // 空セルは緑（ボード）
                     btn.setBackgroundColor(Color.parseColor("#006400")); // 濃い緑
-                    btn.setEnabled((gameMode == 1) ? canPlace(x, y, currentPlayer) : (currentPlayer == 1 && canPlace(x, y, 1)));
+                    btn.setEnabled((gameMode == 1) ? canPlace(x, y, currentPlayer) : (currentPlayer == 1 && canPlace(x, y, 1))); // 2人対戦時はcurrentPlayerで判定 // 2人対戦時はcurrentPlayerで判定
                 } else {
                     GradientDrawable circle = new GradientDrawable();
                     circle.setShape(GradientDrawable.OVAL);
