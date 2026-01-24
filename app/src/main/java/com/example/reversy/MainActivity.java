@@ -147,10 +147,12 @@ public class MainActivity extends Activity {
         }
 
         placeStone(x, y, player);
-        updateBoardUI();
 
         // switch player
         if (gameMode == 1) {
+            currentPlayer = (currentPlayer == 1) ? 2 : 1;
+            updateBoardUI();
+            // pass/endgame handling
             currentPlayer = (currentPlayer == 1) ? 2 : 1;
             // pass/endgame handling
             if (!hasValidMove(currentPlayer)) {
