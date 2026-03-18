@@ -4,7 +4,8 @@
 
     <application
         android:label="reversy"
-        android:theme="@android:style/Theme.Material.Light">
+        android:theme="@android:style/Theme.Material.Light"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"

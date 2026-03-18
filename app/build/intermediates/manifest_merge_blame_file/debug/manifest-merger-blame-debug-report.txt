@@ -1,0 +1,44 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.example.reversy"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="24"
+9        android:targetSdkVersion="34" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/root/reversy/app/src/main/AndroidManifest.xml:3:5-67
+11-->/root/reversy/app/src/main/AndroidManifest.xml:3:22-64
+12
+13    <application
+13-->/root/reversy/app/src/main/AndroidManifest.xml:5:5-21:19
+14        android:debuggable="true"
+15        android:extractNativeLibs="false"
+16        android:label="reversy"
+16-->/root/reversy/app/src/main/AndroidManifest.xml:6:9-32
+17        android:theme="@android:style/Theme.Material.Light"
+17-->/root/reversy/app/src/main/AndroidManifest.xml:7:9-60
+18        android:usesCleartextTraffic="true" >
+18-->/root/reversy/app/src/main/AndroidManifest.xml:8:9-44
+19        <activity
+19-->/root/reversy/app/src/main/AndroidManifest.xml:10:9-19:20
+20            android:name="com.example.reversy.MainActivity"
+20-->/root/reversy/app/src/main/AndroidManifest.xml:11:13-41
+21            android:exported="true" >
+21-->/root/reversy/app/src/main/AndroidManifest.xml:12:13-36
+22            <intent-filter>
+22-->/root/reversy/app/src/main/AndroidManifest.xml:14:13-17:29
+23                <action android:name="android.intent.action.MAIN" />
+23-->/root/reversy/app/src/main/AndroidManifest.xml:15:17-69
+23-->/root/reversy/app/src/main/AndroidManifest.xml:15:25-66
+24
+25                <category android:name="android.intent.category.LAUNCHER" />
+25-->/root/reversy/app/src/main/AndroidManifest.xml:16:17-77
+25-->/root/reversy/app/src/main/AndroidManifest.xml:16:27-74
+26            </intent-filter>
+27        </activity>
+28    </application>
+29
+30</manifest>

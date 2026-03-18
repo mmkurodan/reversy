@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
     private static final int MODE_TWO_PLAYER = 1;
     private static final int MODE_CPU = 2;
     private static final int MODE_AI = 3;
+    private static final String DEFAULT_AI_BASE_URL = "http://127.0.0.1:11434";
     private static final String DEFAULT_AI_PROMPT =
             "あなたはオセロ（リバーシ）の指し手生成エンジンとして動作します。\n\n" +
             "【あなたの役割】\n" +
@@ -66,7 +67,7 @@ public class MainActivity extends Activity {
     // 1 = two-player, 2 = vs CPU, 3 = vs AI(Ollama互換API)
     private int gameMode = MODE_CPU;
     private int simDepth = 1; // lookahead depth in plies
-    private String aiBaseUrl = "";
+    private String aiBaseUrl = DEFAULT_AI_BASE_URL;
     private String aiModel = "default";
     private String aiPrompt = DEFAULT_AI_PROMPT;
 
@@ -202,7 +203,7 @@ public class MainActivity extends Activity {
         container.addView(urlLabel);
 
         EditText urlInput = new EditText(this);
-        urlInput.setHint("http://localhost:11434");
+        urlInput.setHint(DEFAULT_AI_BASE_URL);
         urlInput.setText(aiBaseUrl);
         container.addView(urlInput);
 
@@ -242,6 +243,7 @@ public class MainActivity extends Activity {
                 .setView(scrollView)
                 .setPositiveButton("保存", (dialog, which) -> {
                     aiBaseUrl = normalizeBaseUrl(urlInput.getText().toString());
+                    if (aiBaseUrl.isEmpty()) aiBaseUrl = DEFAULT_AI_BASE_URL;
                     String model = selectedModel[0] == null ? "" : selectedModel[0].trim();
                     aiModel = model.isEmpty() ? "default" : model;
                     String prompt = promptInput.getText().toString();
@@ -249,7 +251,7 @@ public class MainActivity extends Activity {
                     Toast.makeText(this, "AI設定を保存しました", Toast.LENGTH_SHORT).show();
                 })
                 .setNeutralButton("初期化", (dialog, which) -> {
-                    aiBaseUrl = "";
+                    aiBaseUrl = DEFAULT_AI_BASE_URL;
                     aiModel = "default";
                     aiPrompt = DEFAULT_AI_PROMPT;
                     Toast.makeText(this, "AI設定を初期化しました", Toast.LENGTH_SHORT).show();
