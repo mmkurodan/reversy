@@ -27,7 +27,9 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -70,6 +72,8 @@ public class MainActivity extends Activity {
     private String aiBaseUrl = DEFAULT_AI_BASE_URL;
     private String aiModel = "default";
     private String aiPrompt = DEFAULT_AI_PROMPT;
+    private static final int MAX_AI_LOG_ENTRIES = 25;
+    private final List<AiLogEntry> aiLogs = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -234,6 +238,11 @@ public class MainActivity extends Activity {
         promptInput.setGravity(Gravity.TOP | Gravity.START);
         promptInput.setText(aiPrompt);
         container.addView(promptInput);
+
+        Button logBtn = new Button(this);
+        logBtn.setText("AIログ");
+        logBtn.setOnClickListener(v -> showAiLogDialog());
+        container.addView(logBtn);
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.addView(container);
@@ -461,6 +470,7 @@ public class MainActivity extends Activity {
             for (int i = 0; i < 10; i++) {
                 try {
                     String response = requestAiMoveText(baseUrl, model, promptWithBoard);
+                    logAiInteraction(promptWithBoard, response, null);
                     int[] parsed = parseAiMove(response);
                     if (parsed == null) continue;
 
@@ -477,7 +487,12 @@ public class MainActivity extends Activity {
                         break;
                     }
                 } catch (Exception e) {
-                    error = e.getMessage();
+                    String message = e.getMessage();
+                    if (message == null || message.trim().isEmpty()) {
+                        message = e.toString();
+                    }
+                    logAiInteraction(promptWithBoard, null, message);
+                    error = message;
                     break;
                 }
             }
@@ -602,6 +617,81 @@ public class MainActivity extends Activity {
             }
         }
         return sb.toString().trim();
+    }
+
+    private void logAiInteraction(String prompt, String response, String error) {
+        if (prompt == null) return;
+        synchronized (aiLogs) {
+            if (aiLogs.size() >= MAX_AI_LOG_ENTRIES) {
+                aiLogs.remove(0);
+            }
+            aiLogs.add(new AiLogEntry(System.currentTimeMillis(), prompt, response, error));
+        }
+    }
+
+    private void showAiLogDialog() {
+        final TextView content = new TextView(this);
+        int pad = (int) (12 * getResources().getDisplayMetrics().density);
+        content.setPadding(pad, pad, pad, pad);
+        content.setText(buildAiLogText());
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.addView(content);
+
+        new AlertDialog.Builder(this)
+                .setTitle("AI通信ログ")
+                .setView(scrollView)
+                .setPositiveButton("閉じる", null)
+                .setNeutralButton("クリア", (dialog, which) -> {
+                    clearAiLogs();
+                    showAiLogDialog();
+                })
+                .show();
+    }
+
+    private String buildAiLogText() {
+        List<AiLogEntry> snapshot;
+        synchronized (aiLogs) {
+            snapshot = new ArrayList<>(aiLogs);
+        }
+        if (snapshot.isEmpty()) {
+            return "ログはありません。";
+        }
+        StringBuilder sb = new StringBuilder();
+        DateFormat formatter = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, Locale.getDefault());
+        for (int i = snapshot.size() - 1; i >= 0; i--) {
+            AiLogEntry entry = snapshot.get(i);
+            sb.append(formatter.format(new Date(entry.timestamp))).append('\n');
+            sb.append("プロンプト:\n").append(entry.prompt).append('\n');
+            sb.append("レスポンス:\n")
+                    .append(entry.response == null ? "（なし）" : entry.response)
+                    .append('\n');
+            if (entry.error != null) {
+                sb.append("エラー: ").append(entry.error).append('\n');
+            }
+            if (i > 0) sb.append('\n');
+        }
+        return sb.toString().trim();
+    }
+
+    private void clearAiLogs() {
+        synchronized (aiLogs) {
+            aiLogs.clear();
+        }
+        Toast.makeText(this, "AIログをクリアしました", Toast.LENGTH_SHORT).show();
+    }
+
+    private static class AiLogEntry {
+        final long timestamp;
+        final String prompt;
+        final String response;
+        final String error;
+
+        AiLogEntry(long timestamp, String prompt, String response, String error) {
+            this.timestamp = timestamp;
+            this.prompt = prompt;
+            this.response = response;
+            this.error = error;
+        }
     }
 
     // Find best move by simulating up to depth plies (minimax)
