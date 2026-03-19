@@ -2,6 +2,8 @@ package com.example.reversy;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
@@ -30,8 +32,10 @@ import java.nio.charset.StandardCharsets;
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class MainActivity extends Activity {
     private TextView turnView;
@@ -42,25 +46,31 @@ public class MainActivity extends Activity {
     private static final int MODE_AI = 3;
     private static final String DEFAULT_AI_BASE_URL = "http://127.0.0.1:11434";
     private static final String DEFAULT_AI_PROMPT =
-            "あなたはオセロ（リバーシ）の指し手生成エンジンとして動作します。\n\n" +
-            "【あなたの役割】\n" +
-            "- 私が渡す盤面（8行、●=黒、○=白、・=空き）を解析し、次の一手を選ぶ。\n" +
-            "- あなたは白（○）として指すものとする（必要なら黒に変更可能）。\n\n" +
+            "あなたはオセロ（リバーシ）の指し手選択エンジンとして動作する。\n\n" +
+            "【役割】\n" +
+            "- 私が渡す盤面（8行、●=黒、○=白、・=空き）と、合法手候補の一覧を受け取り、\n" +
+            "  白（○）として最善と思う手を1つだけ選ぶ。\n\n" +
+            "【入力形式】\n" +
+            "1. 盤面（8行）\n" +
+            "2. 合法手候補（縦1列、各行に2文字の座標）\n" +
+            "   例：\n" +
+            "   A3\n" +
+            "   C4\n" +
+            "   F5\n\n" +
             "【出力制約】\n" +
-            "- 出力は「座標を表す2文字のみ」とする。\n" +
-            "  例：A1, C4, H8\n" +
-            "- 説明文、盤面、理由、補足は禁止。\n" +
-            "- 合法手が無い場合は \"PASS\" の4文字のみ返す。\n\n" +
-            "【座標体系】\n" +
-            "- 行：A〜H（上から順）\n" +
-            "- 列：1〜8（左から順）\n\n" +
-            "【盤面入力形式】\n" +
-            "- 8行のテキストで盤面を渡す。\n" +
-            "- 例：\n" +
-            "  ●○・・・○\n" +
-            "  ・●○・・・\n" +
-            "  …\n\n" +
-            "盤面を渡すまで何も出力しない。";
+            "- 出力は合法手候補の中から1つだけ選んだ「2文字」。\n" +
+            "- 正規表現：^[A-H][1-8]$\n" +
+            "- 日本語は禁止（例：行1列1、1番目など）。\n" +
+            "- 説明文・理由・盤面の再表示・補足は禁止。\n" +
+            "- 合法手候補が0件の場合のみ PASS と出力する。\n\n" +
+            "【禁止事項】\n" +
+            "- 合法手候補に含まれない座標を出力してはならない。\n" +
+            "- 例示された座標を模倣して出力してはならない（候補に無い場合）。\n" +
+            "- 2文字以外の形式（例：行1列1、(A,3)、A-3）は禁止。\n\n" +
+            "【手順】\n" +
+            "- まず盤面と合法手候補を受け取る。\n" +
+            "- 内部で自由に推論してよいが、最終出力は候補の中から選んだ2文字のみ。\n" +
+            "- 盤面を受け取るまで何も出力しない。";
     private Button[][] cells = new Button[SIZE][SIZE];
     private int[][] board = new int[SIZE][SIZE]; // 0=空, 1=黒(人間), 2=白(対戦相手)
     private int currentPlayer = 1; // 黒スタート（人間）
@@ -450,6 +460,15 @@ public class MainActivity extends Activity {
         }
         updateBoardUI();
 
+        final List<String> legalCandidates = getLegalMoveCodes(2);
+        if (legalCandidates.isEmpty()) {
+            Toast.makeText(this, "AI はパスしました", Toast.LENGTH_SHORT).show();
+            currentPlayer = 1;
+            updateBoardUI();
+            handleTurn();
+            return;
+        }
+
         final String baseUrl = normalizeBaseUrl(aiBaseUrl);
         if (baseUrl.isEmpty()) {
             Toast.makeText(this, "AI URLを設定してください", Toast.LENGTH_LONG).show();
@@ -460,7 +479,8 @@ public class MainActivity extends Activity {
 
         final String model = (aiModel == null || aiModel.trim().isEmpty()) ? "default" : aiModel.trim();
         final String basePrompt = (aiPrompt == null || aiPrompt.trim().isEmpty()) ? DEFAULT_AI_PROMPT : aiPrompt;
-        final String promptWithBoard = basePrompt + "\n\n" + boardToText(board);
+        final String promptWithBoard = buildPromptWithBoardAndCandidates(basePrompt, board, legalCandidates);
+        final Set<String> legalCandidateSet = new HashSet<>(legalCandidates);
 
         new Thread(() -> {
             int[] selectedMove = null;
@@ -475,14 +495,11 @@ public class MainActivity extends Activity {
                     if (parsed == null) continue;
 
                     if (parsed[0] == -1 && parsed[1] == -1) {
-                        if (!hasValidMove(2)) {
-                            pass = true;
-                            break;
-                        }
                         continue;
                     }
 
-                    if (canPlace(parsed[0], parsed[1], 2)) {
+                    String moveCode = toMoveCode(parsed[0], parsed[1]);
+                    if (legalCandidateSet.contains(moveCode) && canPlace(parsed[0], parsed[1], 2)) {
                         selectedMove = parsed;
                         break;
                     }
@@ -598,6 +615,35 @@ public class MainActivity extends Activity {
         return sb.toString();
     }
 
+    private String buildPromptWithBoardAndCandidates(String basePrompt, int[][] b, List<String> candidates) {
+        StringBuilder sb = new StringBuilder(basePrompt);
+        sb.append("\n\n盤面:\n").append(boardToText(b));
+        sb.append("\n\n候補:\n");
+        for (int i = 0; i < candidates.size(); i++) {
+            sb.append(candidates.get(i));
+            if (i < candidates.size() - 1) {
+                sb.append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
+    private List<String> getLegalMoveCodes(int player) {
+        List<String> moves = new ArrayList<>();
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (canPlace(x, y, player)) {
+                    moves.add(toMoveCode(x, y));
+                }
+            }
+        }
+        return moves;
+    }
+
+    private String toMoveCode(int x, int y) {
+        return String.valueOf((char) ('A' + y)) + (char) ('1' + x);
+    }
+
     private String normalizeBaseUrl(String url) {
         if (url == null) return "";
         String normalized = url.trim();
@@ -645,6 +691,7 @@ public class MainActivity extends Activity {
                     clearAiLogs();
                     showAiLogDialog();
                 })
+                .setNegativeButton("コピー", (dialog, which) -> copyAiLogsToClipboard())
                 .show();
     }
 
@@ -678,6 +725,17 @@ public class MainActivity extends Activity {
             aiLogs.clear();
         }
         Toast.makeText(this, "AIログをクリアしました", Toast.LENGTH_SHORT).show();
+    }
+
+    private void copyAiLogsToClipboard() {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard == null) {
+            Toast.makeText(this, "クリップボードにアクセスできません", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        ClipData clip = ClipData.newPlainText("AI通信ログ", buildAiLogText());
+        clipboard.setPrimaryClip(clip);
+        Toast.makeText(this, "AIログをコピーしました", Toast.LENGTH_SHORT).show();
     }
 
     private static class AiLogEntry {
