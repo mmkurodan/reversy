@@ -542,6 +542,7 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show();
                 currentPlayer = 1;
                 updateBoardUI();
+                handleTurn();
             });
         }).start();
     }
@@ -553,7 +554,7 @@ public class MainActivity extends Activity {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
             conn.setConnectTimeout(8000);
-            conn.setReadTimeout(20000);
+            conn.setReadTimeout(180000);
             conn.setDoOutput(true);
 
             JSONObject req = new JSONObject();
