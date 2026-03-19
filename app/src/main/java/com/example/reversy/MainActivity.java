@@ -410,6 +410,7 @@ public class MainActivity extends Activity {
                     Toast.LENGTH_SHORT).show();
 
             currentPlayer = (currentPlayer == 1) ? 2 : 1;
+            updateBoardUI();
 
             // 両者置けない → 終了
             if (!hasValidMove(currentPlayer)) {
