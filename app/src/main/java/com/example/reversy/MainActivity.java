@@ -39,6 +39,8 @@ import java.util.Set;
 
 public class MainActivity extends Activity {
     private TextView turnView;
+    private Button aiConfigBtn;
+    private Button depthBtn;
 
     private static final int SIZE = 8;
     private static final int MODE_TWO_PLAYER = 1;
@@ -113,14 +115,15 @@ public class MainActivity extends Activity {
             }
             modeBtn.setText(getModeLabel());
             resetGame();
+            updateControlVisibility();
             Toast.makeText(this, getModeLabel() + " に切替", Toast.LENGTH_SHORT).show();
         });
 
-        Button aiConfigBtn = new Button(this);
+        aiConfigBtn = new Button(this);
         aiConfigBtn.setText("AI設定");
         aiConfigBtn.setOnClickListener(v -> showAiSettingsDialog());
 
-        Button depthBtn = new Button(this);
+        depthBtn = new Button(this);
         depthBtn.setText("難易度: " + simDepth);
         depthBtn.setOnClickListener(v -> {
             simDepth = (simDepth % 10) + 1; // cycle 1..10
@@ -139,6 +142,8 @@ public class MainActivity extends Activity {
         controls.addView(aiConfigBtn);
         controls.addView(depthBtn);
         controls.addView(resetBtn);
+
+        updateControlVisibility();
 
         root.addView(controls);
 
@@ -198,6 +203,21 @@ public class MainActivity extends Activity {
     private void resetGame() {
         initBoard();
         updateBoardUI();
+    }
+
+    private void updateControlVisibility() {
+        if (aiConfigBtn == null || depthBtn == null) return;
+        if (gameMode == MODE_AI) {
+            aiConfigBtn.setVisibility(View.VISIBLE);
+            depthBtn.setVisibility(View.GONE);
+        } else if (gameMode == MODE_CPU) {
+            aiConfigBtn.setVisibility(View.GONE);
+            depthBtn.setVisibility(View.VISIBLE);
+        } else {
+            // two-player: hide both controls
+            aiConfigBtn.setVisibility(View.GONE);
+            depthBtn.setVisibility(View.GONE);
+        }
     }
 
     private String getModeLabel() {
