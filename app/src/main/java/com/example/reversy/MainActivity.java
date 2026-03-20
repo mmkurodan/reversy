@@ -4,20 +4,25 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
+import android.view.Window;
 import android.widget.Button;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.ScrollView;
 import android.widget.Toast;
 
 import android.widget.TextView;
+import android.view.ViewGroup;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -76,6 +81,11 @@ public class MainActivity extends Activity {
     private static final Pattern AI_MOVE_PATTERN = Pattern.compile(
             "(?<![A-Z0-9])([A-H][1-8])(?![A-Z0-9])",
             Pattern.CASE_INSENSITIVE);
+    private static final int APP_BACKGROUND_COLOR = 0xFF000000;
+    private static final int APP_TEXT_COLOR = 0xFF00FF00;
+    private static final int APP_MUTED_TEXT_COLOR = 0xFF66FF66;
+    private static final int APP_BORDER_COLOR = 0xFF00AA00;
+    private static final int BOARD_EMPTY_COLOR = 0xFF006400;
     private Button[][] cells = new Button[SIZE][SIZE];
     private int[][] board = new int[SIZE][SIZE]; // 0=空, 1=黒(人間), 2=白(対戦相手)
     private int currentPlayer = 1; // 黒スタート（人間）
@@ -91,19 +101,83 @@ public class MainActivity extends Activity {
     private final List<AiLogEntry> aiLogs = new ArrayList<>();
     private final List<String> aiCommentHistory = new ArrayList<>();
     private LinearLayout aiCommentContainer;
-    private ScrollView aiCommentScrollView;
-    private TextView aiCommentView;
+    private EditText aiCommentView;
+
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private GradientDrawable createDarkOutlineBackground(int strokeWidthDp, float radiusDp) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(APP_BACKGROUND_COLOR);
+        drawable.setCornerRadius(dp(radiusDp));
+        drawable.setStroke(dp(strokeWidthDp), APP_BORDER_COLOR);
+        return drawable;
+    }
+
+    private void applyDarkSurface(View view) {
+        if (view != null) {
+            view.setBackgroundColor(APP_BACKGROUND_COLOR);
+        }
+    }
+
+    private void applyDarkLabel(TextView view) {
+        if (view == null) return;
+        view.setTextColor(APP_TEXT_COLOR);
+        view.setBackgroundColor(APP_BACKGROUND_COLOR);
+    }
+
+    private void applyDarkButton(Button button) {
+        if (button == null) return;
+        button.setTextColor(APP_TEXT_COLOR);
+        button.setBackground(createDarkOutlineBackground(1, 8f));
+    }
+
+    private void applyDarkInput(EditText input) {
+        if (input == null) return;
+        input.setTextColor(APP_TEXT_COLOR);
+        input.setHintTextColor(APP_MUTED_TEXT_COLOR);
+        input.setBackground(createDarkOutlineBackground(1, 4f));
+        input.setPadding(dp(10), dp(10), dp(10), dp(10));
+    }
+
+    private void applyDarkSelectableTextView(TextView textView) {
+        if (textView == null) return;
+        textView.setTextColor(APP_TEXT_COLOR);
+        textView.setBackgroundColor(APP_BACKGROUND_COLOR);
+        textView.setTextIsSelectable(true);
+    }
+
+    private void applyDarkReadOnlyCommentField(EditText commentField) {
+        if (commentField == null) return;
+        commentField.setTextColor(APP_TEXT_COLOR);
+        commentField.setHintTextColor(APP_MUTED_TEXT_COLOR);
+        commentField.setBackground(createDarkOutlineBackground(1, 4f));
+        commentField.setPadding(dp(10), dp(10), dp(10), dp(10));
+        commentField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        commentField.setGravity(Gravity.TOP | Gravity.START);
+        commentField.setKeyListener(null);
+        commentField.setTextIsSelectable(true);
+        commentField.setCursorVisible(false);
+        commentField.setShowSoftInputOnFocus(false);
+        commentField.setHorizontallyScrolling(false);
+        commentField.setLongClickable(true);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
         super.onCreate(savedInstanceState);
+        getWindow().setBackgroundDrawable(new ColorDrawable(APP_BACKGROUND_COLOR));
 
         // Root layout
         ScrollView rootScroll = new ScrollView(this);
         rootScroll.setFillViewport(true);
+        applyDarkSurface(rootScroll);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        applyDarkSurface(root);
         rootScroll.addView(root, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT,
                 ScrollView.LayoutParams.WRAP_CONTENT));
@@ -111,13 +185,16 @@ public class MainActivity extends Activity {
         // Controls row
         LinearLayout controls = new LinearLayout(this);
         controls.setOrientation(LinearLayout.HORIZONTAL);
+        applyDarkSurface(controls);
 
         turnView = new TextView(this);
         turnView.setText("ターン: 黒");
+        applyDarkLabel(turnView);
         controls.addView(turnView);
 
         Button modeBtn = new Button(this);
         modeBtn.setText(getModeLabel());
+        applyDarkButton(modeBtn);
         modeBtn.setOnClickListener(v -> {
             if (gameMode == MODE_TWO_PLAYER) {
                 gameMode = MODE_CPU;
@@ -134,10 +211,12 @@ public class MainActivity extends Activity {
 
         aiConfigBtn = new Button(this);
         aiConfigBtn.setText("AI設定");
+        applyDarkButton(aiConfigBtn);
         aiConfigBtn.setOnClickListener(v -> showAiSettingsDialog());
 
         depthBtn = new Button(this);
         depthBtn.setText("難易度: " + simDepth);
+        applyDarkButton(depthBtn);
         depthBtn.setOnClickListener(v -> {
             simDepth = (simDepth % 10) + 1; // cycle 1..10
             depthBtn.setText("難易度: " + simDepth);
@@ -146,6 +225,7 @@ public class MainActivity extends Activity {
 
         Button resetBtn = new Button(this);
         resetBtn.setText("リセット");
+        applyDarkButton(resetBtn);
         resetBtn.setOnClickListener(v -> {
             resetGame();
             Toast.makeText(this, "ゲームをリセットしました", Toast.LENGTH_SHORT).show();
@@ -161,6 +241,7 @@ public class MainActivity extends Activity {
         GridLayout grid = new GridLayout(this);
         grid.setColumnCount(SIZE);
         grid.setRowCount(SIZE);
+        applyDarkSurface(grid);
 
         initBoard();
 
@@ -196,29 +277,24 @@ public class MainActivity extends Activity {
 
         aiCommentContainer = new LinearLayout(this);
         aiCommentContainer.setOrientation(LinearLayout.VERTICAL);
+        applyDarkSurface(aiCommentContainer);
         int commentPad = (int) (12 * getResources().getDisplayMetrics().density);
         aiCommentContainer.setPadding(commentPad, commentPad, commentPad, commentPad);
 
         TextView aiCommentLabel = new TextView(this);
         aiCommentLabel.setText("AIコメント");
+        applyDarkLabel(aiCommentLabel);
         aiCommentContainer.addView(aiCommentLabel);
 
-        aiCommentScrollView = new ScrollView(this);
         LinearLayout.LayoutParams commentScrollParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 (int) (140 * getResources().getDisplayMetrics().density));
         commentScrollParams.topMargin = commentPad / 2;
 
-        aiCommentView = new TextView(this);
+        aiCommentView = new EditText(this);
         aiCommentView.setText("AIのコメントはまだありません。");
-        aiCommentView.setPadding(commentPad, commentPad, commentPad, commentPad);
-        aiCommentView.setBackgroundColor(Color.parseColor("#f0f0f0"));
-        aiCommentView.setTextColor(Color.DKGRAY);
-        aiCommentView.setTextIsSelectable(true);
-        aiCommentScrollView.addView(aiCommentView, new ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT,
-                ScrollView.LayoutParams.WRAP_CONTENT));
-        aiCommentContainer.addView(aiCommentScrollView, commentScrollParams);
+        applyDarkReadOnlyCommentField(aiCommentView);
+        aiCommentContainer.addView(aiCommentView, commentScrollParams);
         root.addView(aiCommentContainer);
 
         updateControlVisibility();
@@ -270,23 +346,28 @@ public class MainActivity extends Activity {
         container.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (12 * getResources().getDisplayMetrics().density);
         container.setPadding(pad, pad, pad, pad);
+        applyDarkSurface(container);
 
         TextView urlLabel = new TextView(this);
         urlLabel.setText("URL");
+        applyDarkLabel(urlLabel);
         container.addView(urlLabel);
 
         EditText urlInput = new EditText(this);
         urlInput.setHint(DEFAULT_AI_BASE_URL);
         urlInput.setText(aiBaseUrl);
+        applyDarkInput(urlInput);
         container.addView(urlInput);
 
         final String[] selectedModel = new String[]{aiModel};
         TextView modelView = new TextView(this);
         modelView.setText("モデル: " + selectedModel[0]);
+        applyDarkLabel(modelView);
         container.addView(modelView);
 
         Button modelSelectBtn = new Button(this);
         modelSelectBtn.setText("api/tags から選択");
+        applyDarkButton(modelSelectBtn);
         modelSelectBtn.setOnClickListener(v -> {
             String baseUrl = normalizeBaseUrl(urlInput.getText().toString());
             if (baseUrl.isEmpty()) {
@@ -299,6 +380,7 @@ public class MainActivity extends Activity {
 
         TextView promptLabel = new TextView(this);
         promptLabel.setText("プロンプト");
+        applyDarkLabel(promptLabel);
         container.addView(promptLabel);
 
         EditText promptInput = new EditText(this);
@@ -306,14 +388,17 @@ public class MainActivity extends Activity {
         promptInput.setMinLines(10);
         promptInput.setGravity(Gravity.TOP | Gravity.START);
         promptInput.setText(aiPrompt);
+        applyDarkInput(promptInput);
         container.addView(promptInput);
 
         Button logBtn = new Button(this);
         logBtn.setText("AIログ");
+        applyDarkButton(logBtn);
         logBtn.setOnClickListener(v -> showAiLogDialog());
         container.addView(logBtn);
 
         ScrollView scrollView = new ScrollView(this);
+        applyDarkSurface(scrollView);
         scrollView.addView(container);
 
         new AlertDialog.Builder(this)
@@ -353,11 +438,29 @@ public class MainActivity extends Activity {
                     }
                     int checked = models.indexOf(selectedModel[0]);
                     if (checked < 0) checked = 0;
-                    CharSequence[] items = models.toArray(new CharSequence[0]);
                     final int[] picked = new int[]{checked};
+                    ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+                            this,
+                            android.R.layout.simple_list_item_single_choice,
+                            models) {
+                        @Override
+                        public View getView(int position, View convertView, ViewGroup parent) {
+                            TextView row = (TextView) super.getView(position, convertView, parent);
+                            applyDarkLabel(row);
+                            row.setPadding(dp(16), dp(12), dp(16), dp(12));
+                            return row;
+                        }
+                    };
+                    ListView listView = new ListView(this);
+                    applyDarkSurface(listView);
+                    listView.setChoiceMode(ListView.CHOICE_MODE_SINGLE);
+                    listView.setAdapter(adapter);
+                    listView.setItemChecked(checked, true);
+                    listView.setOnItemClickListener((parent, view, which, id) -> picked[0] = which);
+
                     new AlertDialog.Builder(this)
                             .setTitle("モデル選択")
-                            .setSingleChoiceItems(items, checked, (dialog, which) -> picked[0] = which)
+                            .setView(listView)
                             .setPositiveButton("選択", (dialog, which) -> {
                                 selectedModel[0] = models.get(picked[0]);
                                 modelView.setText("モデル: " + selectedModel[0]);
@@ -750,7 +853,7 @@ public class MainActivity extends Activity {
             normalizedReason = "（理由なし）";
         }
         synchronized (aiCommentHistory) {
-            aiCommentHistory.add(moveCode + "\n" + normalizedReason);
+            aiCommentHistory.add(0, moveCode + "\n" + normalizedReason);
         }
         updateAiCommentView();
     }
@@ -765,9 +868,7 @@ public class MainActivity extends Activity {
     private void updateAiCommentView() {
         if (aiCommentView != null) {
             aiCommentView.setText(buildAiCommentText());
-            if (aiCommentScrollView != null) {
-                aiCommentScrollView.post(() -> aiCommentScrollView.fullScroll(View.FOCUS_DOWN));
-            }
+            aiCommentView.post(() -> aiCommentView.scrollTo(0, 0));
         }
     }
 
@@ -792,7 +893,9 @@ public class MainActivity extends Activity {
         int pad = (int) (12 * getResources().getDisplayMetrics().density);
         content.setPadding(pad, pad, pad, pad);
         content.setText(buildAiLogText());
+        applyDarkSelectableTextView(content);
         ScrollView scrollView = new ScrollView(this);
+        applyDarkSurface(scrollView);
         scrollView.addView(content);
 
         new AlertDialog.Builder(this)
@@ -1195,7 +1298,7 @@ public class MainActivity extends Activity {
 
                 if (v == 0) {
                     // 空セルは緑（ボード）
-                    btn.setBackgroundColor(Color.parseColor("#006400")); // 濃い緑
+                    btn.setBackgroundColor(BOARD_EMPTY_COLOR); // 濃い緑
                     btn.setEnabled((gameMode == MODE_TWO_PLAYER)
                             ? canPlace(x, y, currentPlayer)
                             : (currentPlayer == 1 && canPlace(x, y, 1)));

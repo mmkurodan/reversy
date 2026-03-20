@@ -1,1 +1,3 @@
-com.example.reversy:mipmap/ic_launcher = 0x7f010000
+com.example.reversy:drawable/ic_launcher_foreground = 0x7f020000
+com.example.reversy:mipmap/ic_launcher = 0x7f030000
+com.example.reversy:color/ic_launcher_background = 0x7f010000

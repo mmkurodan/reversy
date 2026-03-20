@@ -22,8 +22,8 @@
 17-->/root/reversy/app/src/main/AndroidManifest.xml:6:9-32
 18        android:roundIcon="@mipmap/ic_launcher"
 18-->/root/reversy/app/src/main/AndroidManifest.xml:10:9-48
-19        android:theme="@android:style/Theme.Material.Light"
-19-->/root/reversy/app/src/main/AndroidManifest.xml:7:9-60
+19        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+19-->/root/reversy/app/src/main/AndroidManifest.xml:7:9-72
 20        android:usesCleartextTraffic="true" >
 20-->/root/reversy/app/src/main/AndroidManifest.xml:8:9-44
 21        <activity

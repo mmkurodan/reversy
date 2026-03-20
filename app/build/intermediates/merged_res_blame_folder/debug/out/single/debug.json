@@ -24,6 +24,10 @@
         "source": "com.example.reversy.app-main-6:/mipmap-xxxhdpi/ic_launcher.png"
     },
     {
+        "merged": "com.example.reversy.app-merged_res-4:/drawable-nodpi_ic_launcher_foreground.png.flat",
+        "source": "com.example.reversy.app-main-6:/drawable-nodpi/ic_launcher_foreground.png"
+    },
+    {
         "merged": "com.example.reversy.app-merged_res-4:/mipmap-ldpi_ic_launcher.png.flat",
         "source": "com.example.reversy.app-main-6:/mipmap-ldpi/ic_launcher.png"
     }

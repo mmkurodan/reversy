@@ -16,7 +16,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="reversy"
         android:roundIcon="@mipmap/ic_launcher"
-        android:theme="@android:style/Theme.Material.Light"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="true" >
         <activity
             android:name="com.example.reversy.MainActivity"

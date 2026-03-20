@@ -28,7 +28,7 @@ INJECTED from /root/reversy/app/src/main/AndroidManifest.xml:5:5-23:19
 	android:icon
 		ADDED from /root/reversy/app/src/main/AndroidManifest.xml:9:9-43
 	android:theme
-		ADDED from /root/reversy/app/src/main/AndroidManifest.xml:7:9-60
+		ADDED from /root/reversy/app/src/main/AndroidManifest.xml:7:9-72
 	android:usesCleartextTraffic
 		ADDED from /root/reversy/app/src/main/AndroidManifest.xml:8:9-44
 activity#com.example.reversy.MainActivity
