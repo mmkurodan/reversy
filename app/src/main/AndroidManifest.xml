@@ -5,7 +5,9 @@
     <application
         android:label="reversy"
         android:theme="@android:style/Theme.Material.Light"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher">
 
         <activity
             android:name=".MainActivity"
