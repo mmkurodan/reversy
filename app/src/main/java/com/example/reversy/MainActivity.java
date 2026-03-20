@@ -36,6 +36,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private TextView turnView;
@@ -48,31 +50,32 @@ public class MainActivity extends Activity {
     private static final int MODE_AI = 3;
     private static final String DEFAULT_AI_BASE_URL = "http://127.0.0.1:11434";
     private static final String DEFAULT_AI_PROMPT =
-            "あなたはオセロ（リバーシ）の指し手選択エンジンとして動作する。\n\n" +
+            "あなたはオセロ（リバーシ）の指し手選択AIとして動作する。\n\n" +
             "【役割】\n" +
             "- 私が渡す盤面（8行、●=黒、○=白、・=空き）と、合法手候補の一覧を受け取り、\n" +
             "  白（○）として最善と思う手を1つだけ選ぶ。\n\n" +
-            "【入力形式】\n" +
-            "1. 盤面（8行）\n" +
-            "2. 合法手候補（縦1列、各行に2文字の座標）\n" +
-            "   例：\n" +
-            "   A3\n" +
-            "   C4\n" +
-            "   F5\n\n" +
-            "【出力制約】\n" +
-            "- 出力は合法手候補の中から1つだけ選んだ「2文字」で、候補以外の文字列は出力してはならない。\n" +
-            "- 正規表現：^[A-H][1-8]$\n" +
-            "- 日本語は禁止（例：行1列1、1番目など）。\n" +
-            "- 説明文・理由・盤面の再表示・補足は禁止。\n" +
-            "- 合法手候補の一覧が空であっても、候補から1つだけ選ぶように努めてください。\n\n" +
+            "【回答形式】\n" +
+            "- 1行目に、選んだ座標を1つだけ書く。\n" +
+            "- 2行目に、その選択理由を日本語で簡潔に書く。\n" +
+            "- 座標は A1〜H8 の形式にする。\n" +
+            "- 余計な前置き、箇条書き、盤面の再表示は書かない。\n\n" +
             "【禁止事項】\n" +
             "- 合法手候補に含まれない座標を出力してはならない。\n" +
             "- 例示された座標を模倣して出力してはならない（候補に無い場合）。\n" +
-            "- 2文字以外の形式（例：行1列1、(A,3)、A-3）は禁止。\n\n" +
+            "- 2行構成を崩してはならない。\n\n" +
             "【手順】\n" +
             "- まず盤面と合法手候補を受け取る。\n" +
-            "- 内部で自由に推論してよいが、最終出力は候補の中から選んだ2文字のみ。\n" +
+            "- 内部で自由に推論してよいが、最終出力は指定の2行のみ。\n" +
             "- 盤面を受け取るまで何も出力しない。";
+    private static final String AI_RESPONSE_FORMAT_PROMPT =
+            "\n\n【回答形式の再確認】\n" +
+            "- 1行目に選んだ座標を1つだけ書く。\n" +
+            "- 2行目にその選択理由を書く。\n" +
+            "- 座標は A1〜H8 の形式にする。\n" +
+            "- 余計な説明は書かない。";
+    private static final Pattern AI_MOVE_PATTERN = Pattern.compile(
+            "(?<![A-Z0-9])([A-H][1-8])(?![A-Z0-9])",
+            Pattern.CASE_INSENSITIVE);
     private Button[][] cells = new Button[SIZE][SIZE];
     private int[][] board = new int[SIZE][SIZE]; // 0=空, 1=黒(人間), 2=白(対戦相手)
     private int currentPlayer = 1; // 黒スタート（人間）
@@ -86,14 +89,24 @@ public class MainActivity extends Activity {
     private String aiPrompt = DEFAULT_AI_PROMPT;
     private static final int MAX_AI_LOG_ENTRIES = 25;
     private final List<AiLogEntry> aiLogs = new ArrayList<>();
+    private final List<String> aiCommentHistory = new ArrayList<>();
+    private LinearLayout aiCommentContainer;
+    private ScrollView aiCommentScrollView;
+    private TextView aiCommentView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         // Root layout
+        ScrollView rootScroll = new ScrollView(this);
+        rootScroll.setFillViewport(true);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        rootScroll.addView(root, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT));
 
         // Controls row
         LinearLayout controls = new LinearLayout(this);
@@ -143,8 +156,6 @@ public class MainActivity extends Activity {
         controls.addView(depthBtn);
         controls.addView(resetBtn);
 
-        updateControlVisibility();
-
         root.addView(controls);
 
         GridLayout grid = new GridLayout(this);
@@ -182,7 +193,37 @@ public class MainActivity extends Activity {
 
         updateBoardUI();
         root.addView(grid);
-        setContentView(root);
+
+        aiCommentContainer = new LinearLayout(this);
+        aiCommentContainer.setOrientation(LinearLayout.VERTICAL);
+        int commentPad = (int) (12 * getResources().getDisplayMetrics().density);
+        aiCommentContainer.setPadding(commentPad, commentPad, commentPad, commentPad);
+
+        TextView aiCommentLabel = new TextView(this);
+        aiCommentLabel.setText("AIコメント");
+        aiCommentContainer.addView(aiCommentLabel);
+
+        aiCommentScrollView = new ScrollView(this);
+        LinearLayout.LayoutParams commentScrollParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (int) (140 * getResources().getDisplayMetrics().density));
+        commentScrollParams.topMargin = commentPad / 2;
+
+        aiCommentView = new TextView(this);
+        aiCommentView.setText("AIのコメントはまだありません。");
+        aiCommentView.setPadding(commentPad, commentPad, commentPad, commentPad);
+        aiCommentView.setBackgroundColor(Color.parseColor("#f0f0f0"));
+        aiCommentView.setTextColor(Color.DKGRAY);
+        aiCommentView.setTextIsSelectable(true);
+        aiCommentScrollView.addView(aiCommentView, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT));
+        aiCommentContainer.addView(aiCommentScrollView, commentScrollParams);
+        root.addView(aiCommentContainer);
+
+        updateControlVisibility();
+        setContentView(rootScroll);
+        updateAiCommentView();
     }
 
     private void initBoard() {
@@ -202,21 +243,19 @@ public class MainActivity extends Activity {
 
     private void resetGame() {
         initBoard();
+        clearAiComments();
         updateBoardUI();
     }
 
     private void updateControlVisibility() {
-        if (aiConfigBtn == null || depthBtn == null) return;
-        if (gameMode == MODE_AI) {
-            aiConfigBtn.setVisibility(View.VISIBLE);
-            depthBtn.setVisibility(View.GONE);
-        } else if (gameMode == MODE_CPU) {
-            aiConfigBtn.setVisibility(View.GONE);
-            depthBtn.setVisibility(View.VISIBLE);
-        } else {
-            // two-player: hide both controls
-            aiConfigBtn.setVisibility(View.GONE);
-            depthBtn.setVisibility(View.GONE);
+        if (aiConfigBtn != null) {
+            aiConfigBtn.setVisibility(gameMode == MODE_AI ? View.VISIBLE : View.GONE);
+        }
+        if (depthBtn != null) {
+            depthBtn.setVisibility(gameMode == MODE_CPU ? View.VISIBLE : View.GONE);
+        }
+        if (aiCommentContainer != null) {
+            aiCommentContainer.setVisibility(gameMode == MODE_AI ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -504,23 +543,20 @@ public class MainActivity extends Activity {
         final Set<String> legalCandidateSet = new HashSet<>(legalCandidates);
 
         new Thread(() -> {
-            int[] selectedMove = null;
-            boolean pass = false;
+            AiMoveSelection selectedMove = null;
             String error = null;
 
             for (int i = 0; i < 10; i++) {
                 try {
                     String response = requestAiMoveText(baseUrl, model, promptWithBoard);
                     logAiInteraction(promptWithBoard, response, null);
-                    int[] parsed = parseAiMove(response);
+                    AiMoveSelection parsed = parseAiMove(response);
                     if (parsed == null) continue;
-
-                    if (parsed[0] == -1 && parsed[1] == -1) {
+                    if (parsed.isPass()) {
                         continue;
                     }
 
-                    String moveCode = toMoveCode(parsed[0], parsed[1]);
-                    if (legalCandidateSet.contains(moveCode) && canPlace(parsed[0], parsed[1], 2)) {
+                    if (legalCandidateSet.contains(parsed.moveCode) && canPlace(parsed.x, parsed.y, 2)) {
                         selectedMove = parsed;
                         break;
                     }
@@ -535,22 +571,14 @@ public class MainActivity extends Activity {
                 }
             }
 
-            final int[] resultMove = selectedMove;
-            final boolean resultPass = pass;
+            final AiMoveSelection resultMove = selectedMove;
             final String resultError = error;
 
             runOnUiThread(() -> {
                 if (resultMove != null) {
-                    placeStone(resultMove[0], resultMove[1], 2);
+                    placeStone(resultMove.x, resultMove.y, 2);
+                    appendAiComment(resultMove.moveCode, resultMove.reason);
                     Toast.makeText(this, "AI が置きました", Toast.LENGTH_SHORT).show();
-                    currentPlayer = 1;
-                    updateBoardUI();
-                    handleTurn();
-                    return;
-                }
-
-                if (resultPass) {
-                    Toast.makeText(this, "AI はパスしました", Toast.LENGTH_SHORT).show();
                     currentPlayer = 1;
                     updateBoardUI();
                     handleTurn();
@@ -607,20 +635,37 @@ public class MainActivity extends Activity {
         }
     }
 
-    private int[] parseAiMove(String response) {
+    private AiMoveSelection parseAiMove(String response) {
         if (response == null) return null;
-        String text = response.trim().toUpperCase(Locale.US);
-        if ("PASS".equals(text)) {
-            return new int[]{-1, -1};
+        String normalized = response.replace("\r\n", "\n").replace('\r', '\n').trim();
+        if (normalized.isEmpty()) return null;
+        if ("PASS".equalsIgnoreCase(normalized)) {
+            return AiMoveSelection.pass();
         }
-        if (text.length() != 2) return null;
 
-        char row = text.charAt(0);
-        char col = text.charAt(1);
-        if (row < 'A' || row > 'H' || col < '1' || col > '8') {
-            return null;
+        Matcher matcher = AI_MOVE_PATTERN.matcher(normalized);
+        if (!matcher.find()) return null;
+
+        String moveCode = matcher.group(1).toUpperCase(Locale.US);
+        int y = moveCode.charAt(0) - 'A';
+        int x = moveCode.charAt(1) - '1';
+
+        String afterMatch = normalized.substring(matcher.end());
+        String reason = afterMatch.trim();
+        int index = 0;
+        while (index < afterMatch.length()) {
+            char ch = afterMatch.charAt(index);
+            if (ch == ' ' || ch == '\t') {
+                index++;
+                continue;
+            }
+            break;
         }
-        return new int[]{col - '1', row - 'A'};
+        if (index < afterMatch.length() && afterMatch.charAt(index) == '\n') {
+            reason = afterMatch.substring(index + 1).trim();
+        }
+
+        return new AiMoveSelection(x, y, moveCode, reason, false);
     }
 
     private String boardToText(int[][] b) {
@@ -647,6 +692,7 @@ public class MainActivity extends Activity {
                 sb.append('\n');
             }
         }
+        sb.append(AI_RESPONSE_FORMAT_PROMPT);
         return sb.toString();
     }
 
@@ -694,6 +740,50 @@ public class MainActivity extends Activity {
                 aiLogs.remove(0);
             }
             aiLogs.add(new AiLogEntry(System.currentTimeMillis(), prompt, response, error));
+        }
+    }
+
+    private void appendAiComment(String moveCode, String reason) {
+        if (moveCode == null || moveCode.trim().isEmpty()) return;
+        String normalizedReason = reason == null ? "" : reason.replace("\r\n", "\n").replace('\r', '\n').trim();
+        if (normalizedReason.isEmpty()) {
+            normalizedReason = "（理由なし）";
+        }
+        synchronized (aiCommentHistory) {
+            aiCommentHistory.add(moveCode + "\n" + normalizedReason);
+        }
+        updateAiCommentView();
+    }
+
+    private void clearAiComments() {
+        synchronized (aiCommentHistory) {
+            aiCommentHistory.clear();
+        }
+        updateAiCommentView();
+    }
+
+    private void updateAiCommentView() {
+        if (aiCommentView != null) {
+            aiCommentView.setText(buildAiCommentText());
+            if (aiCommentScrollView != null) {
+                aiCommentScrollView.post(() -> aiCommentScrollView.fullScroll(View.FOCUS_DOWN));
+            }
+        }
+    }
+
+    private String buildAiCommentText() {
+        synchronized (aiCommentHistory) {
+            if (aiCommentHistory.isEmpty()) {
+                return "AIのコメントはまだありません。";
+            }
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < aiCommentHistory.size(); i++) {
+                sb.append(aiCommentHistory.get(i));
+                if (i < aiCommentHistory.size() - 1) {
+                    sb.append("\n\n");
+                }
+            }
+            return sb.toString();
         }
     }
 
@@ -771,6 +861,30 @@ public class MainActivity extends Activity {
             this.prompt = prompt;
             this.response = response;
             this.error = error;
+        }
+    }
+
+    private static class AiMoveSelection {
+        final int x;
+        final int y;
+        final String moveCode;
+        final String reason;
+        final boolean pass;
+
+        AiMoveSelection(int x, int y, String moveCode, String reason, boolean pass) {
+            this.x = x;
+            this.y = y;
+            this.moveCode = moveCode;
+            this.reason = reason;
+            this.pass = pass;
+        }
+
+        static AiMoveSelection pass() {
+            return new AiMoveSelection(-1, -1, "PASS", "", true);
+        }
+
+        boolean isPass() {
+            return pass;
         }
     }
 
