@@ -13,32 +13,36 @@
 11-->/root/reversy/app/src/main/AndroidManifest.xml:3:22-64
 12
 13    <application
-13-->/root/reversy/app/src/main/AndroidManifest.xml:5:5-21:19
+13-->/root/reversy/app/src/main/AndroidManifest.xml:5:5-23:19
 14        android:debuggable="true"
 15        android:extractNativeLibs="false"
-16        android:label="reversy"
-16-->/root/reversy/app/src/main/AndroidManifest.xml:6:9-32
-17        android:theme="@android:style/Theme.Material.Light"
-17-->/root/reversy/app/src/main/AndroidManifest.xml:7:9-60
-18        android:usesCleartextTraffic="true" >
-18-->/root/reversy/app/src/main/AndroidManifest.xml:8:9-44
-19        <activity
-19-->/root/reversy/app/src/main/AndroidManifest.xml:10:9-19:20
-20            android:name="com.example.reversy.MainActivity"
-20-->/root/reversy/app/src/main/AndroidManifest.xml:11:13-41
-21            android:exported="true" >
-21-->/root/reversy/app/src/main/AndroidManifest.xml:12:13-36
-22            <intent-filter>
-22-->/root/reversy/app/src/main/AndroidManifest.xml:14:13-17:29
-23                <action android:name="android.intent.action.MAIN" />
-23-->/root/reversy/app/src/main/AndroidManifest.xml:15:17-69
-23-->/root/reversy/app/src/main/AndroidManifest.xml:15:25-66
-24
-25                <category android:name="android.intent.category.LAUNCHER" />
-25-->/root/reversy/app/src/main/AndroidManifest.xml:16:17-77
-25-->/root/reversy/app/src/main/AndroidManifest.xml:16:27-74
-26            </intent-filter>
-27        </activity>
-28    </application>
-29
-30</manifest>
+16        android:icon="@mipmap/ic_launcher"
+16-->/root/reversy/app/src/main/AndroidManifest.xml:9:9-43
+17        android:label="reversy"
+17-->/root/reversy/app/src/main/AndroidManifest.xml:6:9-32
+18        android:roundIcon="@mipmap/ic_launcher"
+18-->/root/reversy/app/src/main/AndroidManifest.xml:10:9-48
+19        android:theme="@android:style/Theme.Material.Light"
+19-->/root/reversy/app/src/main/AndroidManifest.xml:7:9-60
+20        android:usesCleartextTraffic="true" >
+20-->/root/reversy/app/src/main/AndroidManifest.xml:8:9-44
+21        <activity
+21-->/root/reversy/app/src/main/AndroidManifest.xml:12:9-21:20
+22            android:name="com.example.reversy.MainActivity"
+22-->/root/reversy/app/src/main/AndroidManifest.xml:13:13-41
+23            android:exported="true" >
+23-->/root/reversy/app/src/main/AndroidManifest.xml:14:13-36
+24            <intent-filter>
+24-->/root/reversy/app/src/main/AndroidManifest.xml:16:13-19:29
+25                <action android:name="android.intent.action.MAIN" />
+25-->/root/reversy/app/src/main/AndroidManifest.xml:17:17-69
+25-->/root/reversy/app/src/main/AndroidManifest.xml:17:25-66
+26
+27                <category android:name="android.intent.category.LAUNCHER" />
+27-->/root/reversy/app/src/main/AndroidManifest.xml:18:17-77
+27-->/root/reversy/app/src/main/AndroidManifest.xml:18:27-74
+28            </intent-filter>
+29        </activity>
+30    </application>
+31
+32</manifest>

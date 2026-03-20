@@ -1,0 +1,1 @@
+com.example.reversy:mipmap/ic_launcher = 0x7f010000

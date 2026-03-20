@@ -13,7 +13,9 @@
     <application
         android:debuggable="true"
         android:extractNativeLibs="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="reversy"
+        android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.Light"
         android:usesCleartextTraffic="true" >
         <activity
