@@ -6,7 +6,9 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -17,6 +19,7 @@ import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ListView;
 import android.widget.ScrollView;
 import android.widget.Toast;
@@ -59,6 +62,10 @@ public class MainActivity extends Activity {
             "【役割】\n" +
             "- 私が渡す盤面（8行、●=黒、○=白、・=空き）と、合法手候補の一覧を受け取り、\n" +
             "  白（○）として最善と思う手を1つだけ選ぶ。\n\n" +
+            "【戦略】\n" +
+            "- 4つの角（A1, H1, A8, H8）は勝敗に大きく影響するため、取れるなら積極的に取りに行く。\n" +
+            "- 相手に角を取らせないことを優先し、角を渡す手はできるだけ避ける。\n\n" +
+            "- 相手の手で自分のコマがゼロになる展開も避ける。\n\n" +
             "【回答形式】\n" +
             "- 1行目に、選んだ座標を1つだけ書く。\n" +
             "- 2行目に、その選択理由を日本語で簡潔に書く。\n" +
@@ -72,6 +79,7 @@ public class MainActivity extends Activity {
             "- まず盤面と合法手候補を受け取る。\n" +
             "- 内部で自由に推論してよいが、最終出力は指定の2行のみ。\n" +
             "- 盤面を受け取るまで何も出力しない。";
+
     private static final String AI_RESPONSE_FORMAT_PROMPT =
             "\n\n【回答形式の再確認】\n" +
             "- 1行目に選んだ座標を1つだけ書く。\n" +
@@ -86,7 +94,12 @@ public class MainActivity extends Activity {
     private static final int APP_MUTED_TEXT_COLOR = 0xFF66FF66;
     private static final int APP_BORDER_COLOR = 0xFF00AA00;
     private static final int BOARD_EMPTY_COLOR = 0xFF006400;
+    private static final int BUTTON_BACKGROUND_COLOR = 0xFF0F4A0F;
+    private static final int CPU_CORNER_SCORE_WEIGHT = 1000;
+    private static final int CPU_MOBILITY_SCORE_WEIGHT = 25;
     private Button[][] cells = new Button[SIZE][SIZE];
+    private TextView statusView;
+    private ProgressBar statusSpinner;
     private int[][] board = new int[SIZE][SIZE]; // 0=空, 1=黒(人間), 2=白(対戦相手)
     private int currentPlayer = 1; // 黒スタート（人間）
 
@@ -130,7 +143,22 @@ public class MainActivity extends Activity {
     private void applyDarkButton(Button button) {
         if (button == null) return;
         button.setTextColor(APP_TEXT_COLOR);
-        button.setBackground(createDarkOutlineBackground(1, 8f));
+        button.setBackground(createDarkButtonBackground());
+    }
+
+    private void applyDarkStatusView(TextView view) {
+        if (view == null) return;
+        view.setTextColor(APP_TEXT_COLOR);
+        view.setBackground(createDarkOutlineBackground(1, 4f));
+        view.setPadding(dp(10), dp(10), dp(10), dp(10));
+    }
+
+    private GradientDrawable createDarkButtonBackground() {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(BUTTON_BACKGROUND_COLOR);
+        drawable.setCornerRadius(dp(8f));
+        drawable.setStroke(dp(1), APP_BORDER_COLOR);
+        return drawable;
     }
 
     private void applyDarkInput(EditText input) {
@@ -164,6 +192,33 @@ public class MainActivity extends Activity {
         commentField.setLongClickable(true);
     }
 
+    private void setStatusText(String message) {
+        if (statusSpinner != null) {
+            statusSpinner.setVisibility(View.GONE);
+        }
+        if (statusView != null) {
+            statusView.setText(message == null ? "" : message);
+        }
+    }
+
+    private void setThinkingStatus(String message) {
+        if (statusView != null) {
+            statusView.setText(message == null ? "" : message);
+        }
+        if (statusSpinner != null) {
+            statusSpinner.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void showStatusMessage(String message) {
+        showStatusMessage(message, Toast.LENGTH_SHORT);
+    }
+
+    private void showStatusMessage(String message, int duration) {
+        setStatusText(message);
+        Toast.makeText(this, message, duration).show();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -192,6 +247,9 @@ public class MainActivity extends Activity {
         applyDarkLabel(turnView);
         controls.addView(turnView);
 
+        View controlSpacer = new View(this);
+        controls.addView(controlSpacer, new LinearLayout.LayoutParams(dp(16), 1));
+
         Button modeBtn = new Button(this);
         modeBtn.setText(getModeLabel());
         applyDarkButton(modeBtn);
@@ -206,7 +264,7 @@ public class MainActivity extends Activity {
             modeBtn.setText(getModeLabel());
             resetGame();
             updateControlVisibility();
-            Toast.makeText(this, getModeLabel() + " に切替", Toast.LENGTH_SHORT).show();
+            showStatusMessage(getModeLabel() + " に切替");
         });
 
         aiConfigBtn = new Button(this);
@@ -220,7 +278,7 @@ public class MainActivity extends Activity {
         depthBtn.setOnClickListener(v -> {
             simDepth = (simDepth % 10) + 1; // cycle 1..10
             depthBtn.setText("難易度: " + simDepth);
-            Toast.makeText(this, "シミュレーション深さ: " + simDepth, Toast.LENGTH_SHORT).show();
+            showStatusMessage("シミュレーション深さ: " + simDepth);
         });
 
         Button resetBtn = new Button(this);
@@ -228,7 +286,7 @@ public class MainActivity extends Activity {
         applyDarkButton(resetBtn);
         resetBtn.setOnClickListener(v -> {
             resetGame();
-            Toast.makeText(this, "ゲームをリセットしました", Toast.LENGTH_SHORT).show();
+            showStatusMessage("ゲームをリセットしました");
         });
 
         controls.addView(modeBtn);
@@ -237,6 +295,43 @@ public class MainActivity extends Activity {
         controls.addView(resetBtn);
 
         root.addView(controls);
+
+        LinearLayout statusContainer = new LinearLayout(this);
+        statusContainer.setOrientation(LinearLayout.VERTICAL);
+        applyDarkSurface(statusContainer);
+        int statusPad = dp(12);
+        statusContainer.setPadding(statusPad, statusPad, statusPad, statusPad);
+        LinearLayout.LayoutParams statusContainerParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusContainerParams.bottomMargin = dp(12);
+
+        TextView statusLabel = new TextView(this);
+        statusLabel.setText("ステータス");
+        applyDarkLabel(statusLabel);
+        statusContainer.addView(statusLabel);
+
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        statusRow.setPadding(0, dp(8), 0, 0);
+
+        statusSpinner = new ProgressBar(this, null, android.R.attr.progressBarStyleSmall);
+        statusSpinner.setIndeterminate(true);
+        statusSpinner.setVisibility(View.GONE);
+        LinearLayout.LayoutParams spinnerParams = new LinearLayout.LayoutParams(dp(20), dp(20));
+        spinnerParams.rightMargin = dp(10);
+        statusRow.addView(statusSpinner, spinnerParams);
+
+        statusView = new TextView(this);
+        statusView.setText("待機中");
+        applyDarkStatusView(statusView);
+        LinearLayout.LayoutParams statusViewParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        statusRow.addView(statusView, statusViewParams);
+
+        statusContainer.addView(statusRow);
+        root.addView(statusContainer, statusContainerParams);
 
         GridLayout grid = new GridLayout(this);
         grid.setColumnCount(SIZE);
@@ -371,7 +466,7 @@ public class MainActivity extends Activity {
         modelSelectBtn.setOnClickListener(v -> {
             String baseUrl = normalizeBaseUrl(urlInput.getText().toString());
             if (baseUrl.isEmpty()) {
-                Toast.makeText(this, "URLを入力してください", Toast.LENGTH_SHORT).show();
+                showStatusMessage("URLを入力してください");
                 return;
             }
             loadModelsAndShowChooser(baseUrl, selectedModel, modelView);
@@ -411,13 +506,13 @@ public class MainActivity extends Activity {
                     aiModel = model.isEmpty() ? "default" : model;
                     String prompt = promptInput.getText().toString();
                     aiPrompt = prompt.trim().isEmpty() ? DEFAULT_AI_PROMPT : prompt;
-                    Toast.makeText(this, "AI設定を保存しました", Toast.LENGTH_SHORT).show();
+                    showStatusMessage("AI設定を保存しました");
                 })
                 .setNeutralButton("初期化", (dialog, which) -> {
                     aiBaseUrl = DEFAULT_AI_BASE_URL;
                     aiModel = "default";
                     aiPrompt = DEFAULT_AI_PROMPT;
-                    Toast.makeText(this, "AI設定を初期化しました", Toast.LENGTH_SHORT).show();
+                    showStatusMessage("AI設定を初期化しました");
                 })
                 .setNegativeButton("キャンセル", null)
                 .show();
@@ -433,7 +528,7 @@ public class MainActivity extends Activity {
                         String current = (selectedModel[0] == null || selectedModel[0].trim().isEmpty())
                                 ? "default" : selectedModel[0];
                         modelView.setText("モデル: " + current);
-                        Toast.makeText(this, "モデルが見つかりませんでした", Toast.LENGTH_SHORT).show();
+                        showStatusMessage("モデルが見つかりませんでした");
                         return;
                     }
                     int checked = models.indexOf(selectedModel[0]);
@@ -477,7 +572,7 @@ public class MainActivity extends Activity {
                     String current = (selectedModel[0] == null || selectedModel[0].trim().isEmpty())
                             ? "default" : selectedModel[0];
                     modelView.setText("モデル: " + current);
-                    Toast.makeText(this, "モデル取得に失敗: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    showStatusMessage("モデル取得に失敗: " + e.getMessage());
                 });
             }
         }).start();
@@ -532,7 +627,7 @@ public class MainActivity extends Activity {
         int player = currentPlayer;
 
         if (!canPlace(x, y, player)) {
-            Toast.makeText(this, "そこには置けません", Toast.LENGTH_SHORT).show();
+            showStatusMessage("そこには置けません");
             return;
         }
 
@@ -544,9 +639,7 @@ public class MainActivity extends Activity {
             updateBoardUI();
             // pass/endgame handling
             if (!hasValidMove(currentPlayer)) {
-                Toast.makeText(this,
-                        (currentPlayer == 1 ? "黒" : "白") + "は置ける場所がありません（パス）",
-                        Toast.LENGTH_SHORT).show();
+                showStatusMessage((currentPlayer == 1 ? "黒" : "白") + "は置ける場所がありません（パス）");
                 currentPlayer = (currentPlayer == 1) ? 2 : 1;
                 updateBoardUI();
                 if (!hasValidMove(currentPlayer)) {
@@ -567,9 +660,7 @@ public class MainActivity extends Activity {
     private void handleTurn() {
         // 次のプレイヤーが置けるか？
         if (!hasValidMove(currentPlayer)) {
-            Toast.makeText(this,
-                    (currentPlayer == 1 ? "黒" : "白") + "は置ける場所がありません（パス）",
-                    Toast.LENGTH_SHORT).show();
+            showStatusMessage((currentPlayer == 1 ? "黒" : "白") + "は置ける場所がありません（パス）");
 
             currentPlayer = (currentPlayer == 1) ? 2 : 1;
             updateBoardUI();
@@ -594,9 +685,7 @@ public class MainActivity extends Activity {
     // -------------------------
     private void cpuMove() {
         // 思考中表示
-        if (turnView != null) {
-            turnView.setText("CPU思考中...");
-        }
+        setThinkingStatus("CPU思考中...");
         updateBoardUI();
 
         // シミュレーションは別スレッドで実行し、UI更新はメインスレッドで行う
@@ -605,9 +694,9 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (best != null) {
                     placeStone(best[0], best[1], 2);
-                    Toast.makeText(this, "CPU が置きました", Toast.LENGTH_SHORT).show();
+                    showStatusMessage("CPU が置きました");
                 } else {
-                    Toast.makeText(this, "CPU はパスしました", Toast.LENGTH_SHORT).show();
+                    showStatusMessage("CPU はパスしました");
                 }
                 // currentPlayer を先に戻してから UI を更新する（重要）
                 currentPlayer = 1;
@@ -618,14 +707,12 @@ public class MainActivity extends Activity {
     }
 
     private void aiMove() {
-        if (turnView != null) {
-            turnView.setText("AI思考中...");
-        }
+        setThinkingStatus("AI思考中...");
         updateBoardUI();
 
         final List<String> legalCandidates = getLegalMoveCodes(2);
         if (legalCandidates.isEmpty()) {
-            Toast.makeText(this, "AI はパスしました", Toast.LENGTH_SHORT).show();
+            showStatusMessage("AI はパスしました");
             currentPlayer = 1;
             updateBoardUI();
             handleTurn();
@@ -634,7 +721,7 @@ public class MainActivity extends Activity {
 
         final String baseUrl = normalizeBaseUrl(aiBaseUrl);
         if (baseUrl.isEmpty()) {
-            Toast.makeText(this, "AI URLを設定してください", Toast.LENGTH_LONG).show();
+            showStatusMessage("AI URLを設定してください", Toast.LENGTH_LONG);
             currentPlayer = 1;
             updateBoardUI();
             return;
@@ -681,7 +768,7 @@ public class MainActivity extends Activity {
                 if (resultMove != null) {
                     placeStone(resultMove.x, resultMove.y, 2);
                     appendAiComment(resultMove.moveCode, resultMove.reason);
-                    Toast.makeText(this, "AI が置きました", Toast.LENGTH_SHORT).show();
+                    showStatusMessage("AI が置きました");
                     currentPlayer = 1;
                     updateBoardUI();
                     handleTurn();
@@ -691,7 +778,7 @@ public class MainActivity extends Activity {
                 String message = (resultError == null || resultError.trim().isEmpty())
                         ? "AI応答エラー: 有効な座標を取得できませんでした"
                         : "AI連携エラー: " + resultError;
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                showStatusMessage(message, Toast.LENGTH_LONG);
                 currentPlayer = 1;
                 updateBoardUI();
                 handleTurn();
@@ -939,18 +1026,18 @@ public class MainActivity extends Activity {
         synchronized (aiLogs) {
             aiLogs.clear();
         }
-        Toast.makeText(this, "AIログをクリアしました", Toast.LENGTH_SHORT).show();
+        showStatusMessage("AIログをクリアしました");
     }
 
     private void copyAiLogsToClipboard() {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         if (clipboard == null) {
-            Toast.makeText(this, "クリップボードにアクセスできません", Toast.LENGTH_SHORT).show();
+            showStatusMessage("クリップボードにアクセスできません");
             return;
         }
         ClipData clip = ClipData.newPlainText("AI通信ログ", buildAiLogText());
         clipboard.setPrimaryClip(clip);
-        Toast.makeText(this, "AIログをコピーしました", Toast.LENGTH_SHORT).show();
+        showStatusMessage("AIログをコピーしました");
     }
 
     private static class AiLogEntry {
@@ -991,25 +1078,54 @@ public class MainActivity extends Activity {
         }
     }
 
+    private static class CpuMoveEvaluation {
+        final int x;
+        final int y;
+        final int score;
+        final int flips;
+        final boolean cornerMove;
+        final boolean opponentCanTakeCorner;
+        final boolean opponentCanWipeOutPlayer;
+
+        CpuMoveEvaluation(int x, int y, int score, int flips,
+                          boolean cornerMove, boolean opponentCanTakeCorner,
+                          boolean opponentCanWipeOutPlayer) {
+            this.x = x;
+            this.y = y;
+            this.score = score;
+            this.flips = flips;
+            this.cornerMove = cornerMove;
+            this.opponentCanTakeCorner = opponentCanTakeCorner;
+            this.opponentCanWipeOutPlayer = opponentCanWipeOutPlayer;
+        }
+
+        boolean isBetterThan(CpuMoveEvaluation other) {
+            if (cornerMove != other.cornerMove) return cornerMove;
+            if (opponentCanTakeCorner != other.opponentCanTakeCorner) return !opponentCanTakeCorner;
+            if (opponentCanWipeOutPlayer != other.opponentCanWipeOutPlayer) return !opponentCanWipeOutPlayer;
+            if (score != other.score) return score > other.score;
+            return flips > other.flips;
+        }
+    }
+
     // Find best move by simulating up to depth plies (minimax)
     private int[] findBestMoveSim(int player, int depth) {
-        int bestX = -1, bestY = -1;
-        int bestScore = Integer.MIN_VALUE;
+        CpuMoveEvaluation best = null;
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {
                 if (canPlace(x, y, player)) {
+                    int flips = countFlipsOnBoard(board, x, y, player);
                     int[][] copy = cloneBoard(board);
                     placeStoneOnBoard(copy, x, y, player);
                     int score = minimax(copy, (player == 1) ? 2 : 1, depth - 1, player);
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestX = x;
-                        bestY = y;
+                    CpuMoveEvaluation candidate = evaluateCpuMove(copy, x, y, player, score, flips);
+                    if (best == null || candidate.isBetterThan(best)) {
+                        best = candidate;
                     }
                 }
             }
         }
-        if (bestX != -1) return new int[]{bestX, bestY};
+        if (best != null) return new int[]{best.x, best.y};
         return null;
     }
 
@@ -1057,16 +1173,85 @@ public class MainActivity extends Activity {
         }
     }
 
-    private int evaluateBoard(int[][] b, int player) {
-        int me = 0, opp = 0;
-        int opponent = (player == 1) ? 2 : 1;
+    private boolean isCornerSquare(int x, int y) {
+        return (x == 0 || x == SIZE - 1) && (y == 0 || y == SIZE - 1);
+    }
+
+    private int countPiecesOnBoard(int[][] b, int player) {
+        int count = 0;
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {
-                if (b[y][x] == player) me++;
-                else if (b[y][x] == opponent) opp++;
+                if (b[y][x] == player) count++;
             }
         }
-        return me - opp;
+        return count;
+    }
+
+    private int countCornersOnBoard(int[][] b, int player) {
+        int count = 0;
+        if (b[0][0] == player) count++;
+        if (b[0][SIZE - 1] == player) count++;
+        if (b[SIZE - 1][0] == player) count++;
+        if (b[SIZE - 1][SIZE - 1] == player) count++;
+        return count;
+    }
+
+    private int countLegalMovesOnBoard(int[][] b, int player) {
+        int moves = 0;
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (canPlaceOnBoard(b, x, y, player)) moves++;
+            }
+        }
+        return moves;
+    }
+
+    private boolean canTakeAnyCornerOnBoard(int[][] b, int player) {
+        return canPlaceOnBoard(b, 0, 0, player)
+                || canPlaceOnBoard(b, SIZE - 1, 0, player)
+                || canPlaceOnBoard(b, 0, SIZE - 1, player)
+                || canPlaceOnBoard(b, SIZE - 1, SIZE - 1, player);
+    }
+
+    private boolean canOpponentWipeOutPlayerOnBoard(int[][] b, int opponent, int player) {
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (!canPlaceOnBoard(b, x, y, opponent)) continue;
+                int[][] next = cloneBoard(b);
+                placeStoneOnBoard(next, x, y, opponent);
+                if (countPiecesOnBoard(next, player) == 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private CpuMoveEvaluation evaluateCpuMove(int[][] afterMove, int moveX, int moveY, int player, int score, int flips) {
+        int opponent = (player == 1) ? 2 : 1;
+        return new CpuMoveEvaluation(
+                moveX,
+                moveY,
+                score,
+                flips,
+                isCornerSquare(moveX, moveY),
+                canTakeAnyCornerOnBoard(afterMove, opponent),
+                canOpponentWipeOutPlayerOnBoard(afterMove, opponent, player));
+    }
+
+    private int evaluateBoard(int[][] b, int player) {
+        int opponent = (player == 1) ? 2 : 1;
+        int me = countPiecesOnBoard(b, player);
+        int opp = countPiecesOnBoard(b, opponent);
+        if (me == 0) return Integer.MIN_VALUE / 4;
+        if (opp == 0) return Integer.MAX_VALUE / 4;
+
+        int cornerDiff = countCornersOnBoard(b, player) - countCornersOnBoard(b, opponent);
+        int mobilityDiff = countLegalMovesOnBoard(b, player) - countLegalMovesOnBoard(b, opponent);
+        int pieceDiff = me - opp;
+        return (cornerDiff * CPU_CORNER_SCORE_WEIGHT)
+                + (mobilityDiff * CPU_MOBILITY_SCORE_WEIGHT)
+                + pieceDiff;
     }
 
     private int[][] cloneBoard(int[][] src) {
@@ -1297,26 +1482,40 @@ public class MainActivity extends Activity {
                 int v = board[y][x];
 
                 if (v == 0) {
-                    // 空セルは緑（ボード）
-                    btn.setBackgroundColor(BOARD_EMPTY_COLOR); // 濃い緑
+                    btn.setBackground(createBoardCellBackground(0));
                     btn.setEnabled((gameMode == MODE_TWO_PLAYER)
                             ? canPlace(x, y, currentPlayer)
                             : (currentPlayer == 1 && canPlace(x, y, 1)));
                 } else {
-                    GradientDrawable circle = new GradientDrawable();
-                    circle.setShape(GradientDrawable.OVAL);
-                    if (v == 1) {
-                        circle.setColor(Color.BLACK);
-                        circle.setStroke(2, Color.BLACK);
-                    } else { // 白
-                        circle.setColor(Color.WHITE);
-                        circle.setStroke(2, Color.BLACK); // 枠をつけて見えるようにする
-                    }
-                    btn.setBackground(circle);
+                    btn.setBackground(createBoardCellBackground(v));
                     btn.setEnabled(false);
                 }
             }
         }
+    }
+
+    private Drawable createBoardCellBackground(int stone) {
+        GradientDrawable board = new GradientDrawable();
+        board.setColor(BOARD_EMPTY_COLOR);
+
+        if (stone == 0) {
+            return board;
+        }
+
+        GradientDrawable piece = new GradientDrawable();
+        piece.setShape(GradientDrawable.OVAL);
+        if (stone == 1) {
+            piece.setColor(Color.BLACK);
+            piece.setStroke(dp(2), Color.BLACK);
+        } else {
+            piece.setColor(Color.WHITE);
+            piece.setStroke(dp(2), Color.BLACK);
+        }
+
+        LayerDrawable drawable = new LayerDrawable(new Drawable[]{board, piece});
+        int inset = dp(6);
+        drawable.setLayerInset(1, inset, inset, inset, inset);
+        return drawable;
     }
 
     private void showGameResult() {
@@ -1339,7 +1538,7 @@ public class MainActivity extends Activity {
         }
 
         String msg = "ゲーム終了: 黒 " + black + " - 白 " + white + " → " + winner;
-        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        showStatusMessage(msg, Toast.LENGTH_LONG);
 
         // 全ボタンを無効化して入力を止める
         for (int y = 0; y < SIZE; y++) {
