@@ -2,6 +2,10 @@ package com.example.reversy;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.graphics.drawable.ColorDrawable;
@@ -18,6 +22,7 @@ import android.widget.Button;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.GridLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ListView;
@@ -26,6 +31,7 @@ import android.widget.Toast;
 
 import android.widget.TextView;
 import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -62,6 +68,10 @@ public class MainActivity extends Activity {
             "【役割】\n" +
             "- 私が渡す盤面（8行、●=黒、○=白、・=空き）と、合法手候補の一覧を受け取り、\n" +
             "  白（○）として最善と思う手を1つだけ選ぶ。\n\n" +
+            "【座標の読み方】\n" +
+            "- 行ラベルは上から A〜H、列ラベルは左から 1〜8。\n" +
+            "- 座標は「行ラベル + 列番号」で表す。\n" +
+            "- A1 は左上、H8 は右下を指す。\n\n" +
             "【戦略】\n" +
             "- 4つの角（A1, H1, A8, H8）は勝敗に大きく影響するため、取れるなら積極的に取りに行く。\n" +
             "- 相手に角を取らせないことを優先し、角を渡す手はできるだけ避ける。\n\n" +
@@ -69,7 +79,7 @@ public class MainActivity extends Activity {
             "【回答形式】\n" +
             "- 1行目に、選んだ座標を1つだけ書く。\n" +
             "- 2行目に、その選択理由を日本語で簡潔に書く。\n" +
-            "- 座標は A1〜H8 の形式にする。\n" +
+            "- 座標は「行ラベル + 列番号」の A1〜H8 形式にする。\n" +
             "- 余計な前置き、箇条書き、盤面の再表示は書かない。\n\n" +
             "【禁止事項】\n" +
             "- 合法手候補に含まれない座標を出力してはならない。\n" +
@@ -84,7 +94,7 @@ public class MainActivity extends Activity {
             "\n\n【回答形式の再確認】\n" +
             "- 1行目に選んだ座標を1つだけ書く。\n" +
             "- 2行目にその選択理由を書く。\n" +
-            "- 座標は A1〜H8 の形式にする。\n" +
+            "- 座標は「行ラベル + 列番号」の A1〜H8 形式にする。\n" +
             "- 余計な説明は書かない。";
     private static final Pattern AI_MOVE_PATTERN = Pattern.compile(
             "(?<![A-Z0-9])([A-H][1-8])(?![A-Z0-9])",
@@ -97,6 +107,9 @@ public class MainActivity extends Activity {
     private static final int BUTTON_BACKGROUND_COLOR = 0xFF0F4A0F;
     private static final int CPU_CORNER_SCORE_WEIGHT = 1000;
     private static final int CPU_MOBILITY_SCORE_WEIGHT = 25;
+    private static final long PLACE_SLIDE_DURATION_MS = 180L;
+    private static final long FLIP_HALF_DURATION_MS = 110L;
+    private static final long FLIP_STAGGER_MS = 70L;
     private Button[][] cells = new Button[SIZE][SIZE];
     private TextView statusView;
     private ProgressBar statusSpinner;
@@ -115,6 +128,7 @@ public class MainActivity extends Activity {
     private final List<String> aiCommentHistory = new ArrayList<>();
     private LinearLayout aiCommentContainer;
     private EditText aiCommentView;
+    private boolean isMoveAnimating;
 
     private int dp(float value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
@@ -381,15 +395,32 @@ public class MainActivity extends Activity {
         applyDarkLabel(aiCommentLabel);
         aiCommentContainer.addView(aiCommentLabel);
 
-        LinearLayout.LayoutParams commentScrollParams = new LinearLayout.LayoutParams(
+        LinearLayout commentRow = new LinearLayout(this);
+        commentRow.setOrientation(LinearLayout.HORIZONTAL);
+        commentRow.setGravity(Gravity.TOP);
+        LinearLayout.LayoutParams commentRowParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (int) (140 * getResources().getDisplayMetrics().density));
-        commentScrollParams.topMargin = commentPad / 2;
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        commentRowParams.topMargin = commentPad / 2;
+
+        ImageView avatarView = new ImageView(this);
+        avatarView.setImageResource(R.drawable.avator);
+        avatarView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        avatarView.setBackground(createDarkOutlineBackground(1, 8f));
+        int avatarSize = dp(84);
+        LinearLayout.LayoutParams avatarParams = new LinearLayout.LayoutParams(avatarSize, avatarSize);
+        avatarParams.rightMargin = commentPad;
+        commentRow.addView(avatarView, avatarParams);
 
         aiCommentView = new EditText(this);
         aiCommentView.setText("AIのコメントはまだありません。");
         applyDarkReadOnlyCommentField(aiCommentView);
-        aiCommentContainer.addView(aiCommentView, commentScrollParams);
+        LinearLayout.LayoutParams commentScrollParams = new LinearLayout.LayoutParams(
+                0,
+                (int) (140 * getResources().getDisplayMetrics().density),
+                1f);
+        commentRow.addView(aiCommentView, commentScrollParams);
+        aiCommentContainer.addView(commentRow, commentRowParams);
         root.addView(aiCommentContainer);
 
         updateControlVisibility();
@@ -631,27 +662,25 @@ public class MainActivity extends Activity {
             return;
         }
 
-        placeStone(x, y, player);
-
-        // switch player
-        if (gameMode == MODE_TWO_PLAYER) {
-            currentPlayer = (currentPlayer == 1) ? 2 : 1;
-            updateBoardUI();
-            // pass/endgame handling
-            if (!hasValidMove(currentPlayer)) {
-                showStatusMessage((currentPlayer == 1 ? "黒" : "白") + "は置ける場所がありません（パス）");
+        MoveResult moveResult = placeStone(x, y, player);
+        playMoveAnimation(moveResult, () -> {
+            if (gameMode == MODE_TWO_PLAYER) {
                 currentPlayer = (currentPlayer == 1) ? 2 : 1;
                 updateBoardUI();
                 if (!hasValidMove(currentPlayer)) {
-                    showGameResult();
-                    return;
+                    showStatusMessage((currentPlayer == 1 ? "黒" : "白") + "は置ける場所がありません（パス）");
+                    currentPlayer = (currentPlayer == 1) ? 2 : 1;
+                    updateBoardUI();
+                    if (!hasValidMove(currentPlayer)) {
+                        showGameResult();
+                    }
                 }
+            } else {
+                currentPlayer = 2;
+                updateBoardUI();
+                handleTurn();
             }
-        } else {
-            // vs CPU / AI
-            currentPlayer = 2;
-            handleTurn();
-        }
+        });
     }
 
     // -------------------------
@@ -693,15 +722,19 @@ public class MainActivity extends Activity {
             int[] best = findBestMoveSim(2, simDepth);
             runOnUiThread(() -> {
                 if (best != null) {
-                    placeStone(best[0], best[1], 2);
-                    showStatusMessage("CPU が置きました");
+                    MoveResult moveResult = placeStone(best[0], best[1], 2);
+                    playMoveAnimation(moveResult, () -> {
+                        showStatusMessage("CPU が置きました");
+                        currentPlayer = 1;
+                        updateBoardUI();
+                        handleTurn();
+                    });
                 } else {
                     showStatusMessage("CPU はパスしました");
+                    currentPlayer = 1;
+                    updateBoardUI();
+                    handleTurn();
                 }
-                // currentPlayer を先に戻してから UI を更新する（重要）
-                currentPlayer = 1;
-                updateBoardUI();
-                handleTurn();
             });
         }).start();
     }
@@ -766,12 +799,14 @@ public class MainActivity extends Activity {
 
             runOnUiThread(() -> {
                 if (resultMove != null) {
-                    placeStone(resultMove.x, resultMove.y, 2);
-                    appendAiComment(resultMove.moveCode, resultMove.reason);
-                    showStatusMessage("AI が置きました");
-                    currentPlayer = 1;
-                    updateBoardUI();
-                    handleTurn();
+                    MoveResult moveResult = placeStone(resultMove.x, resultMove.y, 2);
+                    playMoveAnimation(moveResult, () -> {
+                        appendAiComment(resultMove.moveCode, resultMove.reason);
+                        showStatusMessage("AI が置きました");
+                        currentPlayer = 1;
+                        updateBoardUI();
+                        handleTurn();
+                    });
                     return;
                 }
 
@@ -860,12 +895,15 @@ public class MainActivity extends Activity {
 
     private String boardToText(int[][] b) {
         StringBuilder sb = new StringBuilder();
+        sb.append("  1 2 3 4 5 6 7 8\n");
         for (int y = 0; y < SIZE; y++) {
+            sb.append((char) ('A' + y)).append(' ');
             for (int x = 0; x < SIZE; x++) {
                 int v = b[y][x];
                 if (v == 1) sb.append('●');
                 else if (v == 2) sb.append('○');
                 else sb.append('・');
+                if (x < SIZE - 1) sb.append(' ');
             }
             if (y < SIZE - 1) sb.append('\n');
         }
@@ -874,6 +912,10 @@ public class MainActivity extends Activity {
 
     private String buildPromptWithBoardAndCandidates(String basePrompt, int[][] b, List<String> candidates) {
         StringBuilder sb = new StringBuilder(basePrompt);
+        sb.append("\n\n座標対応:\n");
+        sb.append("- 行ラベル: A〜H（上から下）\n");
+        sb.append("- 列ラベル: 1〜8（左から右）\n");
+        sb.append("- A1 が左上、H8 が右下\n");
         sb.append("\n\n盤面:\n").append(boardToText(b));
         sb.append("\n\n候補:\n");
         for (int i = 0; i < candidates.size(); i++) {
@@ -1075,6 +1117,29 @@ public class MainActivity extends Activity {
 
         boolean isPass() {
             return pass;
+        }
+    }
+
+    private static class CellPosition {
+        final int x;
+        final int y;
+
+        CellPosition(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    private static class MoveResult {
+        final int x;
+        final int y;
+        final int player;
+        final List<CellPosition> flipped = new ArrayList<>();
+
+        MoveResult(int x, int y, int player) {
+            this.x = x;
+            this.y = y;
+            this.player = player;
         }
     }
 
@@ -1431,7 +1496,8 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    private void placeStone(int x, int y, int player) {
+    private MoveResult placeStone(int x, int y, int player) {
+        MoveResult result = new MoveResult(x, y, player);
         board[y][x] = player;
         int opponent = (player == 1) ? 2 : 1;
 
@@ -1452,6 +1518,7 @@ public class MainActivity extends Activity {
                         int ry = y + dy[d];
                         while (board[ry][rx] == opponent) {
                             board[ry][rx] = player;
+                            result.flipped.add(new CellPosition(rx, ry));
                             rx += dx[d];
                             ry += dy[d];
                         }
@@ -1463,6 +1530,7 @@ public class MainActivity extends Activity {
                 cy += dy[d];
             }
         }
+        return result;
     }
 
     private void updateBoardUI() {
@@ -1479,16 +1547,136 @@ public class MainActivity extends Activity {
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {
                 Button btn = cells[y][x];
+                if (btn == null) continue;
                 int v = board[y][x];
+                btn.setTranslationY(0f);
+                btn.setAlpha(1f);
+                btn.setRotationY(0f);
 
                 if (v == 0) {
                     btn.setBackground(createBoardCellBackground(0));
-                    btn.setEnabled((gameMode == MODE_TWO_PLAYER)
+                    btn.setEnabled(!isMoveAnimating && ((gameMode == MODE_TWO_PLAYER)
                             ? canPlace(x, y, currentPlayer)
-                            : (currentPlayer == 1 && canPlace(x, y, 1)));
+                            : (currentPlayer == 1 && canPlace(x, y, 1))));
                 } else {
                     btn.setBackground(createBoardCellBackground(v));
                     btn.setEnabled(false);
+                }
+            }
+        }
+    }
+
+    private void playMoveAnimation(MoveResult moveResult, Runnable onComplete) {
+        if (moveResult == null) {
+            if (onComplete != null) onComplete.run();
+            return;
+        }
+
+        isMoveAnimating = true;
+        disableBoardInput();
+
+        Button placedCell = cells[moveResult.y][moveResult.x];
+        if (placedCell == null) {
+            isMoveAnimating = false;
+            if (onComplete != null) onComplete.run();
+            return;
+        }
+
+        float startOffset = -dp(12);
+        placedCell.setBackground(createBoardCellBackground(moveResult.player));
+        placedCell.setTranslationY(startOffset);
+        placedCell.setAlpha(0.35f);
+
+        AnimatorSet placedStoneAnimation = new AnimatorSet();
+        placedStoneAnimation.playTogether(
+                ObjectAnimator.ofFloat(placedCell, View.TRANSLATION_Y, startOffset, 0f),
+                ObjectAnimator.ofFloat(placedCell, View.ALPHA, 0.35f, 1f));
+        placedStoneAnimation.setDuration(PLACE_SLIDE_DURATION_MS);
+        placedStoneAnimation.setInterpolator(new DecelerateInterpolator());
+
+        List<Animator> animations = new ArrayList<>();
+        animations.add(placedStoneAnimation);
+
+        long baseDelay = PLACE_SLIDE_DURATION_MS / 2;
+        for (int i = 0; i < moveResult.flipped.size(); i++) {
+            CellPosition flippedCell = moveResult.flipped.get(i);
+            Button flippedButton = cells[flippedCell.y][flippedCell.x];
+            if (flippedButton == null) continue;
+            AnimatorSet flipAnimation = createFlipAnimation(flippedButton, moveResult.player);
+            flipAnimation.setStartDelay(baseDelay + (i * FLIP_STAGGER_MS));
+            animations.add(flipAnimation);
+        }
+
+        AnimatorSet allAnimations = new AnimatorSet();
+        allAnimations.playTogether(animations);
+        allAnimations.addListener(new AnimatorListenerAdapter() {
+            private boolean handled;
+
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                finish();
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                finish();
+            }
+
+            private void finish() {
+                if (handled) return;
+                handled = true;
+                isMoveAnimating = false;
+                if (onComplete != null) {
+                    onComplete.run();
+                } else {
+                    updateBoardUI();
+                }
+            }
+        });
+        allAnimations.start();
+    }
+
+    private AnimatorSet createFlipAnimation(Button cell, int player) {
+        cell.setCameraDistance(getResources().getDisplayMetrics().density * 6000f);
+
+        ObjectAnimator firstHalf = ObjectAnimator.ofFloat(cell, View.ROTATION_Y, 0f, 90f);
+        firstHalf.setDuration(FLIP_HALF_DURATION_MS);
+        firstHalf.setInterpolator(new DecelerateInterpolator());
+        firstHalf.addListener(new AnimatorListenerAdapter() {
+            private boolean swapped;
+
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                swapPieceFace();
+            }
+
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                swapPieceFace();
+            }
+
+            private void swapPieceFace() {
+                if (swapped) return;
+                swapped = true;
+                cell.setBackground(createBoardCellBackground(player));
+                cell.setRotationY(-90f);
+            }
+        });
+
+        ObjectAnimator secondHalf = ObjectAnimator.ofFloat(cell, View.ROTATION_Y, -90f, 0f);
+        secondHalf.setDuration(FLIP_HALF_DURATION_MS);
+        secondHalf.setInterpolator(new DecelerateInterpolator());
+
+        AnimatorSet flipAnimation = new AnimatorSet();
+        flipAnimation.playSequentially(firstHalf, secondHalf);
+        return flipAnimation;
+    }
+
+    private void disableBoardInput() {
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if (cells[y][x] != null) {
+                    cells[y][x].setEnabled(false);
                 }
             }
         }
