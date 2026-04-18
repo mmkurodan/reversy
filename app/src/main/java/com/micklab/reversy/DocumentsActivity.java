@@ -194,27 +194,26 @@ public class DocumentsActivity extends Activity {
 
     private Document[] buildDocuments() {
         return new Document[] {
-                new Document("権限について", buildPermissionsText()),
-                new Document("プライバシーポリシー", buildPrivacyText()),
-                new Document("操作マニュアル", buildManualText())
+                new Document("操作マニュアル", buildManualText()),
+                new Document("Privacy Policy", buildPrivacyText()),
+                new Document("権利表記", buildRightsText())
         };
     }
 
-    private String buildPermissionsText() {
+    private String buildRightsText() {
         StringBuilder sb = new StringBuilder();
-        sb.append("権限について\n\n");
-        sb.append("本アプリが要求する権限は次の 1 件のみです。\n\n");
-        sb.append("1. INTERNET\n");
-        sb.append("   - AI モードで設定した API サーバーへ接続するために使用します。\n");
-        sb.append("   - 黒/白プレイヤーの AI 設定で URL を指定した場合、その宛先へ盤面情報、合法手候補、プロンプト、AI の応答が送信されることがあります。\n");
-        sb.append("   - 初期値は http://127.0.0.1:11434 で、端末内のローカルサーバー向けです。\n\n");
-        sb.append("本アプリは以下の権限を要求しません。\n");
-        sb.append("- 連絡先\n");
-        sb.append("- 位置情報\n");
-        sb.append("- カメラ\n");
-        sb.append("- マイク\n");
-        sb.append("- ストレージ読み書き\n\n");
-        sb.append("AI 機能を使わない場合でも権限定義は含まれますが、通信は AI モードで実際に接続したときだけ発生します。");
+        sb.append("権利表記\n\n");
+        sb.append("1. アプリ本体\n");
+        sb.append("本アプリのゲームロジック、UI、説明文、対局コメント表示などの独自実装部分の権利は、本アプリ提供者に帰属します。\n\n");
+        sb.append("2. 同梱アセット\n");
+        sb.append("アプリ内で使用しているアイコン画像やアバター画像などの同梱アセットは、本アプリの配布物として管理されています。\n");
+        sb.append("再利用や差し替えを行う場合は、差し替え元素材の利用条件を確認してください。\n\n");
+        sb.append("3. 外部サービス\n");
+        sb.append("AI モードで接続するモデル、API、サーバー応答の権利は、それぞれの提供元に帰属します。\n");
+        sb.append("外部 AI サービスを利用する場合は、各提供元の利用規約、ライセンス、プライバシー条件を確認してください。\n\n");
+        sb.append("4. 第三者の権利\n");
+        sb.append("Android、Java、その他プラットフォーム関連名称やコンポーネントの権利は、それぞれの権利者に帰属します。\n");
+        sb.append("今後、第三者ライブラリや素材を追加した場合は、この画面に追記して参照できるようにします。");
         return sb.toString();
     }
 
@@ -246,8 +245,10 @@ public class DocumentsActivity extends Activity {
         sb.append("- 「黒設定」「白設定」では、CPU の深さや AI 接続先 URL、モデル名、プロンプト、タイムアウト、再試行回数を調整できます。\n\n");
         sb.append("2. 対局開始と進行\n");
         sb.append("- 「対局開始」で新しい対局を開始します。\n");
+        sb.append("- 対局が始まると同じ位置のボタンが「リセット」に切り替わり、盤面を初期配置へ戻せます。\n");
+        sb.append("- リセット後は再び「対局開始」に戻るため、次の対局を任意のタイミングで開始できます。\n");
         sb.append("- ユーザ操作の手番では、盤面の置けるマスをタップして石を置きます。\n");
-        sb.append("- 「リセット」で初期配置に戻します。\n\n");
+        sb.append("- CPU や AI を含む対局でも、必要になった時点で「リセット」を押せます。\n\n");
         sb.append("3. コメント欄\n");
         sb.append("- 画面下部のコメント欄には、AI や CPU の着手理由が新しい順で表示されます。\n");
         sb.append("- コメント本文はスクロールできます。\n");
@@ -257,7 +258,7 @@ public class DocumentsActivity extends Activity {
         sb.append("- 応答は 1 行目に座標、2 行目に理由を返す形式を想定しています。\n");
         sb.append("- 各設定画面の「AI通信ログ」で、送受信の履歴を確認・コピーできます。\n\n");
         sb.append("5. ドキュメント\n");
-        sb.append("- 「ドキュメント」ボタンから、権限説明、プライバシーポリシー、操作マニュアルをいつでも参照できます。\n");
+        sb.append("- 「ドキュメント」ボタンから、操作マニュアル、Privacy Policy、権利表記をいつでも参照できます。\n");
         sb.append("- 必要に応じて文書をコピーできます。\n\n");
         sb.append("6. 注意事項\n");
         sb.append("- 外部 AI サーバーを使う場合は、送信先 URL の安全性と利用規約を確認してください。\n");

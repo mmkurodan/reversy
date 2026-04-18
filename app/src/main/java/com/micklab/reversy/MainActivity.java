@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
     private Button whiteModeBtn;
     private Button blackSettingsBtn;
     private Button whiteSettingsBtn;
-    private Button startGameBtn;
+    private Button gameActionBtn;
     private TextView statusView;
     private ProgressBar statusSpinner;
     private TextView commentView;
@@ -469,42 +469,24 @@ public class MainActivity extends Activity {
         actionRow.setPadding(0, dp(8), 0, 0);
         applyDarkSurface(actionRow);
 
-        startGameBtn = new Button(this);
-        startGameBtn.setText("対局開始");
-        applyDarkButton(startGameBtn);
-        startGameBtn.setOnClickListener(v -> startGame());
+        gameActionBtn = new Button(this);
+        gameActionBtn.setText("対局開始");
+        applyDarkButton(gameActionBtn);
+        gameActionBtn.setOnClickListener(v -> onGameActionButtonClicked());
         LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         startParams.rightMargin = dp(8);
-        actionRow.addView(startGameBtn, startParams);
-
-        Button resetBtn = new Button(this);
-        resetBtn.setText("リセット");
-        applyDarkButton(resetBtn);
-        resetBtn.setOnClickListener(v -> {
-            resetGame();
-            showStatusMessage("ゲームをリセットしました");
-        });
-        LinearLayout.LayoutParams resetParams = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        actionRow.addView(resetBtn, resetParams);
-
-        controlContainer.addView(actionRow);
-
-        LinearLayout documentsRow = new LinearLayout(this);
-        documentsRow.setOrientation(LinearLayout.HORIZONTAL);
-        documentsRow.setPadding(0, dp(8), 0, 0);
-        applyDarkSurface(documentsRow);
+        actionRow.addView(gameActionBtn, startParams);
 
         Button documentsBtn = new Button(this);
         documentsBtn.setText("ドキュメント");
         applyDarkButton(documentsBtn);
         documentsBtn.setOnClickListener(v -> startActivity(new Intent(this, DocumentsActivity.class)));
-        documentsRow.addView(documentsBtn, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams documentsParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        actionRow.addView(documentsBtn, documentsParams);
 
-        controlContainer.addView(documentsRow);
+        controlContainer.addView(actionRow);
 
         root.addView(controlContainer);
 
@@ -695,6 +677,9 @@ public class MainActivity extends Activity {
         }
         if (whiteSettingsBtn != null) {
             whiteSettingsBtn.setText("白設定");
+        }
+        if (gameActionBtn != null) {
+            gameActionBtn.setText(gameStarted ? "リセット" : "対局開始");
         }
     }
 
@@ -1000,7 +985,17 @@ public class MainActivity extends Activity {
 
     private void startGame() {
         gameStarted = true;
+        updateControlPanel();
         handleTurn();
+    }
+
+    private void onGameActionButtonClicked() {
+        if (gameStarted) {
+            resetGame();
+            showStatusMessage("ゲームをリセットしました");
+            return;
+        }
+        startGame();
     }
 
     private void handleTurn() {
