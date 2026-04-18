@@ -73,7 +73,7 @@ public class MainActivity extends Activity {
     private static final int APP_MUTED_TEXT_COLOR = 0xFF66FF66;
     private static final int APP_BORDER_COLOR = 0xFF00AA00;
     private static final int BOARD_EMPTY_COLOR = 0xFF006400;
-    private static final int BOARD_GRID_COLOR = 0xFF0B5F0B;
+    private static final int BOARD_GRID_COLOR = 0xFF000000;
     private static final int BUTTON_BACKGROUND_COLOR = 0xFF0F4A0F;
     private static final int COMMENT_PANEL_COLOR = 0xB8000000;
     private static final int COMMENT_FIELD_COLOR = 0x70000000;
@@ -593,7 +593,7 @@ public class MainActivity extends Activity {
             }
             return false;
         });
-        int commentAreaHeight = Math.max(avatarSize, dp(200));
+        int commentAreaHeight = avatarSize;
         LinearLayout.LayoutParams commentScrollParams = new LinearLayout.LayoutParams(
                 0,
                 commentAreaHeight,
