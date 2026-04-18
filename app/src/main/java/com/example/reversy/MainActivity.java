@@ -105,6 +105,7 @@ public class MainActivity extends Activity {
     private Button whiteModeBtn;
     private Button blackSettingsBtn;
     private Button whiteSettingsBtn;
+    private Button startGameBtn;
     private TextView statusView;
     private ProgressBar statusSpinner;
     private TextView commentView;
@@ -112,6 +113,7 @@ public class MainActivity extends Activity {
 
     private int currentPlayer = PLAYER_BLACK;
     private boolean isMoveAnimating;
+    private boolean gameStarted = false;
 
     private PlayerConfig blackConfig;
     private PlayerConfig whiteConfig;
@@ -122,6 +124,8 @@ public class MainActivity extends Activity {
         String aiBaseUrl;
         String aiModel;
         String aiPrompt;
+        int aiTimeoutSec;
+        int aiMaxRetries;
     }
 
     private static class AiLogEntry {
@@ -458,6 +462,20 @@ public class MainActivity extends Activity {
 
         controlContainer.addView(settingsRow);
 
+        LinearLayout actionRow = new LinearLayout(this);
+        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionRow.setPadding(0, dp(8), 0, 0);
+        applyDarkSurface(actionRow);
+
+        startGameBtn = new Button(this);
+        startGameBtn.setText("対局開始");
+        applyDarkButton(startGameBtn);
+        startGameBtn.setOnClickListener(v -> startGame());
+        LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        startParams.rightMargin = dp(8);
+        actionRow.addView(startGameBtn, startParams);
+
         Button resetBtn = new Button(this);
         resetBtn.setText("リセット");
         applyDarkButton(resetBtn);
@@ -466,27 +484,22 @@ public class MainActivity extends Activity {
             showStatusMessage("ゲームをリセットしました");
         });
         LinearLayout.LayoutParams resetParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        resetParams.topMargin = dp(8);
-        controlContainer.addView(resetBtn, resetParams);
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        actionRow.addView(resetBtn, resetParams);
+
+        controlContainer.addView(actionRow);
 
         root.addView(controlContainer);
 
         LinearLayout statusContainer = new LinearLayout(this);
         statusContainer.setOrientation(LinearLayout.VERTICAL);
-        statusContainer.setPadding(outerPad, dp(4), outerPad, dp(12));
+        statusContainer.setPadding(outerPad, dp(4), outerPad, dp(8));
         applyDarkSurface(statusContainer);
-
-        TextView statusLabel = new TextView(this);
-        statusLabel.setText("ステータス");
-        applyDarkLabel(statusLabel);
-        statusContainer.addView(statusLabel);
 
         LinearLayout statusRow = new LinearLayout(this);
         statusRow.setOrientation(LinearLayout.HORIZONTAL);
         statusRow.setGravity(Gravity.CENTER_VERTICAL);
-        statusRow.setPadding(0, dp(8), 0, 0);
+        statusRow.setPadding(0, 0, 0, 0);
         applyDarkSurface(statusRow);
 
         statusSpinner = new ProgressBar(this, null, android.R.attr.progressBarStyleSmall);
@@ -593,14 +606,11 @@ public class MainActivity extends Activity {
 
         commentOverlay.addView(commentRow);
 
-        FrameLayout.LayoutParams commentOverlayParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP);
-        commentOverlayParams.leftMargin = outerPad;
-        commentOverlayParams.rightMargin = outerPad;
-        commentOverlayParams.topMargin = outerPad;
-        boardFrame.addView(commentOverlay, commentOverlayParams);
+        LinearLayout.LayoutParams commentContainerParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        commentContainerParams.setMargins(outerPad, dp(8), outerPad, outerPad);
+        root.addView(commentOverlay, commentContainerParams);
 
         setContentView(rootScroll);
         updateCommentView();
@@ -616,6 +626,8 @@ public class MainActivity extends Activity {
         config.aiBaseUrl = DEFAULT_AI_BASE_URL;
         config.aiModel = DEFAULT_AI_MODEL;
         config.aiPrompt = buildDefaultAiPromptForPlayer(player);
+        config.aiTimeoutSec = 180;
+        config.aiMaxRetries = 10;
         return config;
     }
 
@@ -683,6 +695,7 @@ public class MainActivity extends Activity {
     }
 
     private void resetGame() {
+        gameStarted = false;
         initBoard();
         clearMoveComments();
         updateControlPanel();
@@ -766,6 +779,30 @@ public class MainActivity extends Activity {
         applyDarkInput(promptInput);
         container.addView(promptInput);
 
+        TextView timeoutLabel = new TextView(this);
+        timeoutLabel.setText("AIタイムアウト（秒）");
+        timeoutLabel.setPadding(0, dp(10), 0, 0);
+        applyDarkLabel(timeoutLabel);
+        container.addView(timeoutLabel);
+
+        EditText timeoutInput = new EditText(this);
+        timeoutInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        timeoutInput.setText(String.valueOf(config.aiTimeoutSec));
+        applyDarkInput(timeoutInput);
+        container.addView(timeoutInput);
+
+        TextView retriesLabel = new TextView(this);
+        retriesLabel.setText("AI繰り返し回数");
+        retriesLabel.setPadding(0, dp(10), 0, 0);
+        applyDarkLabel(retriesLabel);
+        container.addView(retriesLabel);
+
+        EditText retriesInput = new EditText(this);
+        retriesInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        retriesInput.setText(String.valueOf(config.aiMaxRetries));
+        applyDarkInput(retriesInput);
+        container.addView(retriesInput);
+
         Button logBtn = new Button(this);
         logBtn.setText(getPlayerLabel(player) + "AIログ");
         applyDarkButton(logBtn);
@@ -793,7 +830,19 @@ public class MainActivity extends Activity {
                     config.aiPrompt = prompt.trim().isEmpty()
                             ? buildDefaultAiPromptForPlayer(player)
                             : prompt;
-                    updateControlPanel();
+                    try {
+                        int t = Integer.parseInt(timeoutInput.getText().toString().trim());
+                        config.aiTimeoutSec = t > 0 ? t : 180;
+                    } catch (NumberFormatException e) {
+                        config.aiTimeoutSec = 180;
+                    }
+                    try {
+                        int r = Integer.parseInt(retriesInput.getText().toString().trim());
+                        config.aiMaxRetries = r > 0 ? r : 10;
+                    } catch (NumberFormatException e) {
+                        config.aiMaxRetries = 10;
+                    }
+                    resetGame();
                     showStatusMessage(getPlayerLabel(player) + "の設定を保存しました");
                 })
                 .setNeutralButton("初期化", (dialog, which) -> {
@@ -802,6 +851,8 @@ public class MainActivity extends Activity {
                     config.aiBaseUrl = defaults.aiBaseUrl;
                     config.aiModel = defaults.aiModel;
                     config.aiPrompt = defaults.aiPrompt;
+                    config.aiTimeoutSec = defaults.aiTimeoutSec;
+                    config.aiMaxRetries = defaults.aiMaxRetries;
                     showStatusMessage(getPlayerLabel(player) + "の設定を初期化しました");
                 })
                 .setNegativeButton("キャンセル", null)
@@ -912,6 +963,8 @@ public class MainActivity extends Activity {
             return;
         }
 
+        gameStarted = true;
+
         final int movingPlayer = currentPlayer;
         MoveResult moveResult = placeStone(x, y, movingPlayer);
         playMoveAnimation(moveResult, () -> {
@@ -921,8 +974,23 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void startGame() {
+        gameStarted = true;
+        handleTurn();
+    }
+
     private void handleTurn() {
         if (currentPlayer == 0 || isMoveAnimating) {
+            return;
+        }
+
+        if (!gameStarted) {
+            PlayerConfig config = getPlayerConfig(currentPlayer);
+            if (config.mode == MODE_HUMAN) {
+                setStatusText(getPlayerLabel(currentPlayer) + "は操作するか「対局開始」を押してください");
+            } else {
+                setStatusText("「対局開始」を押してください");
+            }
             return;
         }
 
@@ -1014,9 +1082,9 @@ public class MainActivity extends Activity {
             AiMoveSelection selectedMove = null;
             String error = null;
 
-            for (int i = 0; i < 10; i++) {
+            for (int i = 0; i < config.aiMaxRetries; i++) {
                 try {
-                    String response = requestAiMoveText(baseUrl, model, promptWithBoard);
+                    String response = requestAiMoveText(baseUrl, model, promptWithBoard, config.aiTimeoutSec * 1000);
                     logAiInteraction(player, promptWithBoard, response, null);
                     AiMoveSelection parsed = parseAiMove(response);
                     if (parsed == null || parsed.isPass()) {
@@ -1064,14 +1132,14 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private String requestAiMoveText(String baseUrl, String model, String prompt) throws Exception {
+    private String requestAiMoveText(String baseUrl, String model, String prompt, int readTimeoutMs) throws Exception {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(baseUrl + "/api/generate").openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
             conn.setConnectTimeout(8000);
-            conn.setReadTimeout(180000);
+            conn.setReadTimeout(readTimeoutMs);
             conn.setDoOutput(true);
 
             JSONObject req = new JSONObject();
