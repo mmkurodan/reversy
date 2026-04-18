@@ -1,38 +1,38 @@
 [
     {
-        "merged": "/root/.gradle/daemon/8.12/com.example.reversy.app-merged_res-4:/mipmap-xxxhdpi_ic_launcher.png.flat",
-        "source": "/root/.gradle/daemon/8.12/com.example.reversy.app-main-6:/mipmap-xxxhdpi/ic_launcher.png"
+        "merged": "com.micklab.reversy.app-merged_res-4:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.micklab.reversy.app-main-6:/mipmap-hdpi/ic_launcher.png"
     },
     {
-        "merged": "/root/.gradle/daemon/8.12/com.example.reversy.app-merged_res-4:/mipmap-ldpi_ic_launcher.png.flat",
-        "source": "/root/.gradle/daemon/8.12/com.example.reversy.app-main-6:/mipmap-ldpi/ic_launcher.png"
+        "merged": "com.micklab.reversy.app-merged_res-4:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.micklab.reversy.app-main-6:/mipmap-xhdpi/ic_launcher.png"
     },
     {
-        "merged": "/root/.gradle/daemon/8.12/com.example.reversy.app-merged_res-4:/drawable-nodpi_ic_launcher_foreground.png.flat",
-        "source": "/root/.gradle/daemon/8.12/com.example.reversy.app-main-6:/drawable-nodpi/ic_launcher_foreground.png"
+        "merged": "com.micklab.reversy.app-merged_res-4:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.micklab.reversy.app-main-6:/mipmap-mdpi/ic_launcher.png"
     },
     {
-        "merged": "/root/.gradle/daemon/8.12/com.example.reversy.app-merged_res-4:/mipmap-xxhdpi_ic_launcher.png.flat",
-        "source": "/root/.gradle/daemon/8.12/com.example.reversy.app-main-6:/mipmap-xxhdpi/ic_launcher.png"
+        "merged": "com.micklab.reversy.app-merged_res-4:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.micklab.reversy.app-main-6:/mipmap-xxxhdpi/ic_launcher.png"
     },
     {
-        "merged": "com.example.reversy.app-merged_res-4:/drawable-nodpi_avator.jpg.flat",
-        "source": "com.example.reversy.app-main-6:/drawable-nodpi/avator.jpg"
+        "merged": "com.micklab.reversy.app-merged_res-4:/drawable-nodpi_avator.jpg.flat",
+        "source": "com.micklab.reversy.app-main-6:/drawable-nodpi/avator.jpg"
     },
     {
-        "merged": "/root/.gradle/daemon/8.12/com.example.reversy.app-merged_res-4:/mipmap-mdpi_ic_launcher.png.flat",
-        "source": "/root/.gradle/daemon/8.12/com.example.reversy.app-main-6:/mipmap-mdpi/ic_launcher.png"
+        "merged": "com.micklab.reversy.app-merged_res-4:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.micklab.reversy.app-main-6:/mipmap-anydpi-v26/ic_launcher.xml"
     },
     {
-        "merged": "/root/.gradle/daemon/8.12/com.example.reversy.app-merged_res-4:/mipmap-anydpi-v26_ic_launcher.xml.flat",
-        "source": "/root/.gradle/daemon/8.12/com.example.reversy.app-main-6:/mipmap-anydpi-v26/ic_launcher.xml"
+        "merged": "com.micklab.reversy.app-merged_res-4:/mipmap-ldpi_ic_launcher.png.flat",
+        "source": "com.micklab.reversy.app-main-6:/mipmap-ldpi/ic_launcher.png"
     },
     {
-        "merged": "/root/.gradle/daemon/8.12/com.example.reversy.app-merged_res-4:/mipmap-xhdpi_ic_launcher.png.flat",
-        "source": "/root/.gradle/daemon/8.12/com.example.reversy.app-main-6:/mipmap-xhdpi/ic_launcher.png"
+        "merged": "com.micklab.reversy.app-merged_res-4:/drawable-nodpi_ic_launcher_foreground.png.flat",
+        "source": "com.micklab.reversy.app-main-6:/drawable-nodpi/ic_launcher_foreground.png"
     },
     {
-        "merged": "/root/.gradle/daemon/8.12/com.example.reversy.app-merged_res-4:/mipmap-hdpi_ic_launcher.png.flat",
-        "source": "/root/.gradle/daemon/8.12/com.example.reversy.app-main-6:/mipmap-hdpi/ic_launcher.png"
+        "merged": "com.micklab.reversy.app-merged_res-4:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.micklab.reversy.app-main-6:/mipmap-xxhdpi/ic_launcher.png"
     }
 ]

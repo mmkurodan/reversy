@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.example.reversy.app-merged_res-4:/values_values.arsc.flat",
+            "outputFile": "com.micklab.reversy.app-merged_res-4:/values_values.arsc.flat",
             "map": [
                 {
                     "source": "/root/reversy/app/src/main/res/values/ic_launcher_background.xml",

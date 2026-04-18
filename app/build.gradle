@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace "com.example.reversy"
+    namespace "com.micklab.reversy"
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.example.reversy"
+        applicationId "com.micklab.reversy"
         minSdk 24
         targetSdk 34
         versionCode 1
