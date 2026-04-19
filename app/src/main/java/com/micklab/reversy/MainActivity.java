@@ -21,6 +21,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -339,6 +340,33 @@ public class MainActivity extends Activity {
         button.setBackground(createDarkButtonBackground());
     }
 
+    private TextView createGreenDialogTitle(String title) {
+        TextView titleView = new TextView(this);
+        titleView.setText(title);
+        titleView.setTextColor(Color.BLACK);
+        titleView.setBackgroundColor(APP_TEXT_COLOR);
+        titleView.setTextSize(18f);
+        titleView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        titleView.setGravity(Gravity.CENTER_VERTICAL);
+        titleView.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        return titleView;
+    }
+
+    private void applySafeAreaPadding(View view, int baseLeft, int baseTop, int baseRight, int baseBottom, boolean includeHorizontalInsets) {
+        view.setPadding(baseLeft, baseTop, baseRight, baseBottom);
+        view.setOnApplyWindowInsetsListener((v, insets) -> {
+            int left = baseLeft + (includeHorizontalInsets ? insets.getSystemWindowInsetLeft() : 0);
+            int top = baseTop + insets.getSystemWindowInsetTop();
+            int right = baseRight + (includeHorizontalInsets ? insets.getSystemWindowInsetRight() : 0);
+            int bottom = baseBottom + insets.getSystemWindowInsetBottom();
+            v.setPadding(left, top, right, bottom);
+            return insets;
+        });
+        view.post(view::requestApplyInsets);
+    }
+
     private void applyModeButtonStyle(Button button, boolean active) {
         if (button == null) return;
         button.setTextColor(active ? ACTIVE_BUTTON_TEXT_COLOR : APP_TEXT_COLOR);
@@ -406,6 +434,7 @@ public class MainActivity extends Activity {
         ScrollView rootScroll = new ScrollView(this);
         rootScroll.setFillViewport(true);
         applyDarkSurface(rootScroll);
+        applySafeAreaPadding(rootScroll, dp(12), dp(12), dp(12), dp(12), false);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -827,7 +856,7 @@ public class MainActivity extends Activity {
         scrollView.addView(container);
 
         new AlertDialog.Builder(this)
-                .setTitle(getPlayerLabel(player) + "の設定")
+                .setCustomTitle(createGreenDialogTitle(getPlayerLabel(player) + "の設定"))
                 .setView(scrollView)
                 .setPositiveButton("保存", (dialog, which) -> {
                     config.cpuDepth = selectedDepth[0];

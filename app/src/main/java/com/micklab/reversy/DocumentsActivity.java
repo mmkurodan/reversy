@@ -9,8 +9,10 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowInsets;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -55,6 +57,7 @@ public class DocumentsActivity extends Activity {
         root.setBackgroundColor(APP_BACKGROUND_COLOR);
         int outerPad = dp(12);
         root.setPadding(outerPad, outerPad, outerPad, outerPad);
+        applySafeAreaPadding(root, outerPad, outerPad, outerPad, outerPad, true);
 
         TextView headerView = new TextView(this);
         headerView.setText("ドキュメント");
@@ -196,6 +199,19 @@ public class DocumentsActivity extends Activity {
     private void applyDarkButton(Button button) {
         button.setTextColor(APP_TEXT_COLOR);
         button.setBackground(createOutlinedBackground(BUTTON_BACKGROUND_COLOR, 1, 8f, APP_BORDER_COLOR));
+    }
+
+    private void applySafeAreaPadding(View view, int baseLeft, int baseTop, int baseRight, int baseBottom, boolean includeHorizontalInsets) {
+        view.setPadding(baseLeft, baseTop, baseRight, baseBottom);
+        view.setOnApplyWindowInsetsListener((v, insets) -> {
+            int left = baseLeft + (includeHorizontalInsets ? insets.getSystemWindowInsetLeft() : 0);
+            int top = baseTop + insets.getSystemWindowInsetTop();
+            int right = baseRight + (includeHorizontalInsets ? insets.getSystemWindowInsetRight() : 0);
+            int bottom = baseBottom + insets.getSystemWindowInsetBottom();
+            v.setPadding(left, top, right, bottom);
+            return insets;
+        });
+        view.post(view::requestApplyInsets);
     }
 
     private void showDocument(int index) {
