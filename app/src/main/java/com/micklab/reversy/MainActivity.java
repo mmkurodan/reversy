@@ -113,10 +113,13 @@ public class MainActivity extends Activity {
     private ProgressBar statusSpinner;
     private TextView commentView;
     private ScrollView commentScrollView;
+    private FrameLayout boardFrame;
+    private GridLayout boardGrid;
 
     private int currentPlayer = PLAYER_BLACK;
     private boolean isMoveAnimating;
     private boolean gameStarted = false;
+    private int boardLayoutSize = -1;
 
     private PlayerConfig blackConfig;
     private PlayerConfig whiteConfig;
@@ -290,6 +293,54 @@ public class MainActivity extends Activity {
 
     private int dp(float value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void updateBoardLayout(int availableWidth) {
+        if (boardFrame == null || boardGrid == null || availableWidth <= 0) {
+            return;
+        }
+
+        int cellSize = Math.max(1, (availableWidth - (SIZE * 2)) / SIZE);
+        int boardSize = (cellSize * SIZE) + (SIZE * 2);
+        if (boardSize == boardLayoutSize) {
+            return;
+        }
+        boardLayoutSize = boardSize;
+
+        ViewGroup.LayoutParams frameParams = boardFrame.getLayoutParams();
+        if (frameParams == null) {
+            frameParams = new LinearLayout.LayoutParams(boardSize, boardSize);
+        } else {
+            frameParams.width = boardSize;
+            frameParams.height = boardSize;
+        }
+        boardFrame.setLayoutParams(frameParams);
+
+        ViewGroup.LayoutParams gridParams = boardGrid.getLayoutParams();
+        if (gridParams == null) {
+            gridParams = new FrameLayout.LayoutParams(boardSize, boardSize);
+        } else {
+            gridParams.width = boardSize;
+            gridParams.height = boardSize;
+        }
+        boardGrid.setLayoutParams(gridParams);
+
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                GridLayout.LayoutParams cellParams = (GridLayout.LayoutParams) cells[y][x].getLayoutParams();
+                if (cellParams == null) {
+                    cellParams = new GridLayout.LayoutParams(
+                            GridLayout.spec(y), GridLayout.spec(x));
+                }
+                cellParams.width = cellSize;
+                cellParams.height = cellSize;
+                cellParams.setMargins(1, 1, 1, 1);
+                cells[y][x].setLayoutParams(cellParams);
+            }
+        }
+
+        boardFrame.requestLayout();
+        boardGrid.requestLayout();
     }
 
     private GradientDrawable createOutlinedBackground(int fillColor, int strokeWidthDp, float radiusDp, int strokeColor) {
@@ -550,21 +601,24 @@ public class MainActivity extends Activity {
         initBoard();
 
         int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        int cellSize = screenWidth / SIZE;
 
-        FrameLayout boardFrame = new FrameLayout(this);
+        boardFrame = new FrameLayout(this);
         boardFrame.setBackgroundColor(BOARD_EMPTY_COLOR);
-        root.addView(boardFrame);
+        LinearLayout.LayoutParams boardFrameParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        boardFrameParams.gravity = Gravity.CENTER_HORIZONTAL;
+        root.addView(boardFrame, boardFrameParams);
 
-        GridLayout grid = new GridLayout(this);
-        grid.setColumnCount(SIZE);
-        grid.setRowCount(SIZE);
-        grid.setBackgroundColor(BOARD_GRID_COLOR);
+        boardGrid = new GridLayout(this);
+        boardGrid.setColumnCount(SIZE);
+        boardGrid.setRowCount(SIZE);
+        boardGrid.setBackgroundColor(BOARD_GRID_COLOR);
         FrameLayout.LayoutParams gridParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER_HORIZONTAL);
-        boardFrame.addView(grid, gridParams);
+        boardFrame.addView(boardGrid, gridParams);
 
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {
@@ -576,8 +630,6 @@ public class MainActivity extends Activity {
 
                 GridLayout.LayoutParams params = new GridLayout.LayoutParams(
                         GridLayout.spec(y), GridLayout.spec(x));
-                params.width = cellSize;
-                params.height = cellSize;
                 params.setMargins(1, 1, 1, 1);
                 btn.setLayoutParams(params);
 
@@ -586,7 +638,7 @@ public class MainActivity extends Activity {
                 btn.setOnClickListener(v -> onHumanMove(fx, fy));
 
                 cells[y][x] = btn;
-                grid.addView(btn);
+                boardGrid.addView(btn);
             }
         }
 
@@ -648,6 +700,12 @@ public class MainActivity extends Activity {
         root.addView(commentOverlay, commentContainerParams);
 
         setContentView(rootScroll);
+        root.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if ((right - left) != (oldRight - oldLeft)) {
+                updateBoardLayout(right - left);
+            }
+        });
+        root.post(() -> updateBoardLayout(root.getWidth()));
         updateCommentView();
         updateControlPanel();
         updateBoardUI();
