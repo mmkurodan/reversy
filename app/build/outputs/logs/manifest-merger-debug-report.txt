@@ -22,7 +22,7 @@ INJECTED from /root/reversy/app/src/main/AndroidManifest.xml:5:5-27:19
 	android:extractNativeLibs
 		INJECTED from /root/reversy/app/src/main/AndroidManifest.xml
 	android:label
-		ADDED from /root/reversy/app/src/main/AndroidManifest.xml:6:9-32
+		ADDED from /root/reversy/app/src/main/AndroidManifest.xml:6:9-41
 	android:roundIcon
 		ADDED from /root/reversy/app/src/main/AndroidManifest.xml:10:9-48
 	android:icon
