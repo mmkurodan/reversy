@@ -77,9 +77,31 @@ public class DocumentsActivity extends Activity {
         for (int i = 0; i < documents.length; i++) {
             titles[i] = documents[i].title;
         }
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, titles);
+        // Custom adapter so selected item is shown in green and dropdown highlights selected item
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, titles) {
+            @Override
+            public android.view.View getView(int position, android.view.View convertView, ViewGroup parent) {
+                TextView v = (TextView) super.getView(position, convertView, parent);
+                v.setTextColor(APP_TEXT_COLOR); // selected item text (closed spinner)
+                return v;
+            }
+
+            @Override
+            public android.view.View getDropDownView(int position, android.view.View convertView, ViewGroup parent) {
+                TextView v = (TextView) super.getDropDownView(position, convertView, parent);
+                // Color the currently selected item in the dropdown green, others muted
+                if (position == documentSpinner.getSelectedItemPosition()) {
+                    v.setTextColor(APP_TEXT_COLOR);
+                } else {
+                    v.setTextColor(APP_MUTED_TEXT_COLOR);
+                }
+                return v;
+            }
+        };
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         documentSpinner.setAdapter(adapter);
+        // Set a green border for the spinner (transparent fill)
+        documentSpinner.setBackground(createOutlinedBackground(0x00000000, 2, 6f, APP_BORDER_COLOR));
         root.addView(documentSpinner, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
