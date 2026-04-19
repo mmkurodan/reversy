@@ -83,12 +83,14 @@ public class DocumentsActivity extends Activity {
             public android.view.View getView(int position, android.view.View convertView, ViewGroup parent) {
                 TextView v = (TextView) super.getView(position, convertView, parent);
                 v.setTextColor(APP_TEXT_COLOR); // selected item text (closed spinner)
+                v.setBackgroundColor(Color.TRANSPARENT);
                 return v;
             }
 
             @Override
             public android.view.View getDropDownView(int position, android.view.View convertView, ViewGroup parent) {
                 TextView v = (TextView) super.getDropDownView(position, convertView, parent);
+                v.setBackgroundColor(APP_BACKGROUND_COLOR);
                 // Color the currently selected item in the dropdown green, others muted
                 if (position == documentSpinner.getSelectedItemPosition()) {
                     v.setTextColor(APP_TEXT_COLOR);
@@ -100,6 +102,7 @@ public class DocumentsActivity extends Activity {
         };
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         documentSpinner.setAdapter(adapter);
+        documentSpinner.setPopupBackgroundDrawable(new ColorDrawable(APP_BACKGROUND_COLOR));
         // Set a green border for the spinner (transparent fill)
         documentSpinner.setBackground(createOutlinedBackground(0x00000000, 2, 6f, APP_BORDER_COLOR));
         root.addView(documentSpinner, new LinearLayout.LayoutParams(
