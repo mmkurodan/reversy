@@ -10,8 +10,9 @@ android {
         applicationId "com.micklab.reversy"
         minSdk 24
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        def githubRunNumber = System.getenv("GITHUB_RUN_NUMBER") ?: "1"
+        versionCode Integer.parseInt(githubRunNumber)
+        versionName "1.${githubRunNumber}"
     }
 
     signingConfigs {
