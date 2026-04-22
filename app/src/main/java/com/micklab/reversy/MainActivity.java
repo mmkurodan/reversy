@@ -1196,6 +1196,14 @@ public class MainActivity extends Activity {
                         selectedMove = parsed;
                         break;
                     }
+                } catch (AiNetworkException e) {
+                    String message = e.getMessage();
+                    if (message == null || message.trim().isEmpty()) {
+                        message = e.toString();
+                    }
+                    logAiInteraction(player, promptWithBoard, null, message);
+                    error = message;
+                    continue;
                 } catch (Exception e) {
                     String message = e.getMessage();
                     if (message == null || message.trim().isEmpty()) {
@@ -1266,7 +1274,7 @@ public class MainActivity extends Activity {
             int code = conn.getResponseCode();
             String body = readStream(code >= 400 ? conn.getErrorStream() : conn.getInputStream());
             if (code >= 400) {
-                throw new IllegalStateException("HTTP " + code + (body.isEmpty() ? "" : ": " + body));
+                throw new AiNetworkException("HTTP " + code + (body.isEmpty() ? "" : ": " + body));
             }
 
             JSONObject root = new JSONObject(body);
@@ -1278,6 +1286,10 @@ public class MainActivity extends Activity {
                 }
             }
             return response;
+        } catch (AiNetworkException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AiNetworkException(e);
         } finally {
             if (conn != null) conn.disconnect();
         }
@@ -2129,5 +2141,15 @@ public class MainActivity extends Activity {
         currentPlayer = 0;
         updateBoardUI();
         showStatusMessage("ゲーム終了: 黒 " + black + " - 白 " + white + " → " + winner);
+    }
+}
+
+class AiNetworkException extends Exception {
+    AiNetworkException(String message) {
+        super(message);
+    }
+
+    AiNetworkException(Throwable cause) {
+        super(cause);
     }
 }
