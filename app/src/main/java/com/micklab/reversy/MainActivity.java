@@ -1182,12 +1182,13 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             AiMoveSelection selectedMove = null;
             String error = null;
-            boolean maxRetriesExceeded = false;
+            boolean connectionErrorOccurred = false;
 
             for (int i = 0; i < config.aiMaxRetries; i++) {
                 try {
                     String response = requestAiMoveText(baseUrl, model, promptWithBoard, config.aiTimeoutSec * 1000);
                     logAiInteraction(player, promptWithBoard, response, null);
+                    connectionErrorOccurred = false;
                     AiMoveSelection parsed = parseAiMove(response);
                     if (parsed == null || parsed.isPass()) {
                         continue;
@@ -1203,6 +1204,7 @@ public class MainActivity extends Activity {
                     }
                     logAiInteraction(player, promptWithBoard, null, message);
                     error = message;
+                    connectionErrorOccurred = true;
                     continue;
                 } catch (Exception e) {
                     String message = e.getMessage();
@@ -1215,13 +1217,11 @@ public class MainActivity extends Activity {
                 }
             }
 
-            if (selectedMove == null && error == null) {
-                maxRetriesExceeded = true;
-            }
+            boolean shouldStopGame = connectionErrorOccurred && selectedMove == null;
 
             final AiMoveSelection resultMove = selectedMove;
             final String resultError = error;
-            final boolean isMaxRetriesExceeded = maxRetriesExceeded;
+            final boolean isGameStopped = shouldStopGame;
 
             runOnUiThread(() -> {
                 if (resultMove != null) {
@@ -1236,8 +1236,11 @@ public class MainActivity extends Activity {
                     return;
                 }
 
-                if (isMaxRetriesExceeded) {
-                    showStatusMessage(getPlayerLabel(player) + " AI: 試行回数を超過しました。ゲーム進行は停止しました。");
+                if (isGameStopped) {
+                    String message = (resultError == null || resultError.trim().isEmpty())
+                            ? getPlayerLabel(player) + " AI接続エラー。ゲーム進行は停止しました。"
+                            : getPlayerLabel(player) + " AI接続エラー: " + resultError + "\nゲーム進行は停止しました。";
+                    showStatusMessage(message);
                     return;
                 }
 
