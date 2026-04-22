@@ -465,12 +465,7 @@ public class MainActivity extends Activity {
     }
 
     private void showStatusMessage(String message) {
-        showStatusMessage(message, Toast.LENGTH_SHORT);
-    }
-
-    private void showStatusMessage(String message, int duration) {
         setStatusText(message);
-        Toast.makeText(this, message, duration).show();
     }
 
     @Override
@@ -1168,7 +1163,7 @@ public class MainActivity extends Activity {
 
         final String baseUrl = normalizeBaseUrl(config.aiBaseUrl);
         if (baseUrl.isEmpty()) {
-            showStatusMessage(getPlayerLabel(player) + " AI のURLを設定してください", Toast.LENGTH_LONG);
+            showStatusMessage(getPlayerLabel(player) + " AI のURLを設定してください");
             currentPlayer = getOpponent(player);
             updateBoardUI();
             handleTurn();
@@ -1187,6 +1182,7 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             AiMoveSelection selectedMove = null;
             String error = null;
+            boolean maxRetriesExceeded = false;
 
             for (int i = 0; i < config.aiMaxRetries; i++) {
                 try {
@@ -1211,8 +1207,13 @@ public class MainActivity extends Activity {
                 }
             }
 
+            if (selectedMove == null && error == null) {
+                maxRetriesExceeded = true;
+            }
+
             final AiMoveSelection resultMove = selectedMove;
             final String resultError = error;
+            final boolean isMaxRetriesExceeded = maxRetriesExceeded;
 
             runOnUiThread(() -> {
                 if (resultMove != null) {
@@ -1227,10 +1228,15 @@ public class MainActivity extends Activity {
                     return;
                 }
 
+                if (isMaxRetriesExceeded) {
+                    showStatusMessage(getPlayerLabel(player) + " AI: 試行回数を超過しました。ゲーム進行は停止しました。");
+                    return;
+                }
+
                 String message = (resultError == null || resultError.trim().isEmpty())
                         ? getPlayerLabel(player) + " AI応答エラー: 有効な座標を取得できませんでした"
                         : getPlayerLabel(player) + " AI連携エラー: " + resultError;
-                showStatusMessage(message, Toast.LENGTH_LONG);
+                showStatusMessage(message);
                 currentPlayer = getOpponent(player);
                 updateBoardUI();
                 handleTurn();
@@ -2122,6 +2128,6 @@ public class MainActivity extends Activity {
 
         currentPlayer = 0;
         updateBoardUI();
-        showStatusMessage("ゲーム終了: 黒 " + black + " - 白 " + white + " → " + winner, Toast.LENGTH_LONG);
+        showStatusMessage("ゲーム終了: 黒 " + black + " - 白 " + white + " → " + winner);
     }
 }
