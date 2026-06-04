@@ -34,6 +34,7 @@ import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Switch;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -126,6 +127,7 @@ public class MainActivity extends Activity {
 
     private static class PlayerConfig {
         int mode;
+        int savedNonAiMode;
         int cpuDepth;
         String aiBaseUrl;
         String aiModel;
@@ -710,6 +712,7 @@ public class MainActivity extends Activity {
     private PlayerConfig createDefaultPlayerConfig(int player, int mode) {
         PlayerConfig config = new PlayerConfig();
         config.mode = mode;
+        config.savedNonAiMode = (mode != MODE_AI) ? mode : MODE_HUMAN;
         config.cpuDepth = 1;
         config.aiBaseUrl = DEFAULT_AI_BASE_URL;
         config.aiModel = DEFAULT_AI_MODEL;
@@ -803,8 +806,23 @@ public class MainActivity extends Activity {
         container.setPadding(pad, pad, pad, pad);
         applyDarkSurface(container);
 
+        LinearLayout aiSwitchRow = new LinearLayout(this);
+        aiSwitchRow.setOrientation(LinearLayout.HORIZONTAL);
+        aiSwitchRow.setGravity(Gravity.CENTER_VERTICAL);
+        applyDarkSurface(aiSwitchRow);
+
+        Switch aiSwitch = new Switch(this);
+        aiSwitch.setText("AI有効");
+        aiSwitch.setTextColor(APP_TEXT_COLOR);
+        aiSwitch.setChecked(config.mode == MODE_AI);
+        aiSwitchRow.addView(aiSwitch, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        container.addView(aiSwitchRow);
+
         TextView modeLabel = new TextView(this);
         modeLabel.setText("現在モード: " + getModeLabel(config.mode));
+        modeLabel.setPadding(0, dp(6), 0, 0);
         applyDarkLabel(modeLabel);
         container.addView(modeLabel);
 
@@ -912,6 +930,16 @@ public class MainActivity extends Activity {
                 .setCustomTitle(createGreenDialogTitle(getPlayerLabel(player) + "の設定"))
                 .setView(scrollView)
                 .setPositiveButton("保存", (dialog, which) -> {
+                    if (aiSwitch.isChecked()) {
+                        if (config.mode != MODE_AI) {
+                            config.savedNonAiMode = config.mode;
+                        }
+                        config.mode = MODE_AI;
+                    } else {
+                        if (config.mode == MODE_AI) {
+                            config.mode = (config.savedNonAiMode != MODE_AI) ? config.savedNonAiMode : MODE_HUMAN;
+                        }
+                    }
                     config.cpuDepth = selectedDepth[0];
                     String baseUrl = normalizeBaseUrl(urlInput.getText().toString());
                     config.aiBaseUrl = baseUrl.isEmpty() ? DEFAULT_AI_BASE_URL : baseUrl;
@@ -1149,7 +1177,8 @@ public class MainActivity extends Activity {
 
     private void aiMove(int player) {
         PlayerConfig config = getPlayerConfig(player);
-        setThinkingStatus(getPlayerLabel(player) + " AI 思考中...");
+        final int maxRetries = config.aiMaxRetries;
+        setThinkingStatus(getPlayerLabel(player) + " AI 思考中... (試行 1/" + maxRetries + ")");
         updateBoardUI();
 
         final List<String> legalCandidates = getLegalMoveCodes(player);
@@ -1184,7 +1213,10 @@ public class MainActivity extends Activity {
             String error = null;
             boolean connectionErrorOccurred = false;
 
-            for (int i = 0; i < config.aiMaxRetries; i++) {
+            for (int i = 0; i < maxRetries; i++) {
+                final int attempt = i + 1;
+                runOnUiThread(() -> setThinkingStatus(
+                        getPlayerLabel(player) + " AI 思考中... (試行 " + attempt + "/" + maxRetries + ")"));
                 try {
                     String response = requestAiMoveText(baseUrl, model, promptWithBoard, config.aiTimeoutSec * 1000);
                     logAiInteraction(player, promptWithBoard, response, null);
@@ -1217,11 +1249,9 @@ public class MainActivity extends Activity {
                 }
             }
 
-            boolean shouldStopGame = connectionErrorOccurred && selectedMove == null;
-
             final AiMoveSelection resultMove = selectedMove;
             final String resultError = error;
-            final boolean isGameStopped = shouldStopGame;
+            final boolean isConnectionError = connectionErrorOccurred;
 
             runOnUiThread(() -> {
                 if (resultMove != null) {
@@ -1236,21 +1266,17 @@ public class MainActivity extends Activity {
                     return;
                 }
 
-                if (isGameStopped) {
-                    String message = (resultError == null || resultError.trim().isEmpty())
-                            ? getPlayerLabel(player) + " AI接続エラー。ゲーム進行は停止しました。"
-                            : getPlayerLabel(player) + " AI接続エラー: " + resultError + "\nゲーム進行は停止しました。";
-                    showStatusMessage(message);
-                    return;
-                }
-
-                String message = (resultError == null || resultError.trim().isEmpty())
-                        ? getPlayerLabel(player) + " AI応答エラー: 有効な座標を取得できませんでした"
-                        : getPlayerLabel(player) + " AI連携エラー: " + resultError;
-                showStatusMessage(message);
-                currentPlayer = getOpponent(player);
+                // 試行回数超過 → ゲーム終了
+                currentPlayer = 0;
                 updateBoardUI();
-                handleTurn();
+                if (isConnectionError && resultError != null && !resultError.trim().isEmpty()) {
+                    showStatusMessage(getPlayerLabel(player)
+                            + " AI接続エラー: " + resultError + "\nAI試行回数超過。ゲーム終了。");
+                } else if (isConnectionError) {
+                    showStatusMessage(getPlayerLabel(player) + " AI接続エラー。AI試行回数超過。ゲーム終了。");
+                } else {
+                    showStatusMessage(getPlayerLabel(player) + " AI試行回数超過。ゲーム終了。");
+                }
             });
         }).start();
     }
