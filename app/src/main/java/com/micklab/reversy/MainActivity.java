@@ -1332,26 +1332,19 @@ public class MainActivity extends Activity {
             return AiMoveSelection.pass();
         }
 
-        Matcher matcher = AI_MOVE_PATTERN.matcher(normalized);
+        String[] lines = normalized.split("\n", 3);
+        if (lines.length == 0) return null;
+
+        Matcher matcher = AI_MOVE_PATTERN.matcher(lines[0]);
         if (!matcher.find()) return null;
 
         String moveCode = matcher.group(1).toUpperCase(Locale.US);
         int y = moveCode.charAt(0) - 'A';
         int x = moveCode.charAt(1) - '1';
 
-        String afterMatch = normalized.substring(matcher.end());
-        String reason = afterMatch.trim();
-        int index = 0;
-        while (index < afterMatch.length()) {
-            char ch = afterMatch.charAt(index);
-            if (ch == ' ' || ch == '\t') {
-                index++;
-                continue;
-            }
-            break;
-        }
-        if (index < afterMatch.length() && afterMatch.charAt(index) == '\n') {
-            reason = afterMatch.substring(index + 1).trim();
+        String reason = "";
+        if (lines.length > 1) {
+            reason = lines[1].trim();
         }
 
         return new AiMoveSelection(x, y, moveCode, reason, false);
