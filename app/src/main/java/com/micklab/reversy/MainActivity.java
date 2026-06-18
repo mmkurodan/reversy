@@ -6,9 +6,12 @@ import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
@@ -34,7 +37,6 @@ import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Switch;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -69,6 +71,17 @@ public class MainActivity extends Activity {
     private static final String DEFAULT_AI_BASE_URL = "http://127.0.0.1:11434";
     private static final String DEFAULT_AI_MODEL = "default";
     private static final int MAX_AI_LOG_ENTRIES = 25;
+
+    private static final String LLM_TESTER_PACKAGE = "com.micklab.llama";
+    private static final String LLM_TESTER_SERVICE_CLASS = "com.micklab.llama.OllamaForegroundService";
+    private static final String LLM_TESTER_SERVICE_ACTION_START = "com.micklab.llama.START_SERVICE";
+    private static final String LLM_TESTER_PLAY_STORE_URL =
+            "https://play.google.com/store/apps/details?id=com.micklab.llama";
+    private static final String API_STATUS_AVAILABLE_TEXT = "LLM API Available";
+    private static final String API_STATUS_UNAVAILABLE_TEXT = "LLM API NOT Available";
+    private static final int API_STATUS_AVAILABLE_BG = 0xFF81C784;
+    private static final int API_STATUS_UNAVAILABLE_BG = 0xFFFFF59D;
+    private static final int API_STATUS_TEXT_COLOR = 0xFF000000;
 
     private static final int APP_BACKGROUND_COLOR = 0xFF000000;
     private static final int APP_TEXT_COLOR = 0xFF00FF00;
@@ -806,26 +819,6 @@ public class MainActivity extends Activity {
         container.setPadding(pad, pad, pad, pad);
         applyDarkSurface(container);
 
-        LinearLayout aiSwitchRow = new LinearLayout(this);
-        aiSwitchRow.setOrientation(LinearLayout.HORIZONTAL);
-        aiSwitchRow.setGravity(Gravity.CENTER_VERTICAL);
-        applyDarkSurface(aiSwitchRow);
-
-        Switch aiSwitch = new Switch(this);
-        aiSwitch.setText("AI有効");
-        aiSwitch.setTextColor(APP_TEXT_COLOR);
-        aiSwitch.setChecked(config.mode == MODE_AI);
-        aiSwitchRow.addView(aiSwitch, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT));
-        container.addView(aiSwitchRow);
-
-        TextView modeLabel = new TextView(this);
-        modeLabel.setText("現在モード: " + getModeLabel(config.mode));
-        modeLabel.setPadding(0, dp(6), 0, 0);
-        applyDarkLabel(modeLabel);
-        container.addView(modeLabel);
-
         TextView depthLabel = new TextView(this);
         depthLabel.setText("CPU深さ");
         depthLabel.setPadding(0, dp(10), 0, 0);
@@ -842,6 +835,29 @@ public class MainActivity extends Activity {
         });
         container.addView(depthBtn);
 
+        Button launchApiBtn = new Button(this);
+        launchApiBtn.setText("LLM APIを起動");
+        applyDarkButton(launchApiBtn);
+        LinearLayout.LayoutParams launchApiParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        launchApiParams.topMargin = dp(10);
+        container.addView(launchApiBtn, launchApiParams);
+
+        TextView apiStatusView = new TextView(this);
+        apiStatusView.setText(API_STATUS_UNAVAILABLE_TEXT);
+        apiStatusView.setTextColor(API_STATUS_TEXT_COLOR);
+        apiStatusView.setPadding(dp(10), dp(8), dp(10), dp(8));
+        GradientDrawable apiStatusBg = new GradientDrawable();
+        apiStatusBg.setColor(API_STATUS_UNAVAILABLE_BG);
+        apiStatusBg.setCornerRadius(dp(4f));
+        apiStatusView.setBackground(apiStatusBg);
+        LinearLayout.LayoutParams apiStatusParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        apiStatusParams.topMargin = dp(6);
+        container.addView(apiStatusView, apiStatusParams);
+
         TextView urlLabel = new TextView(this);
         urlLabel.setText("AI URL");
         urlLabel.setPadding(0, dp(10), 0, 0);
@@ -853,6 +869,12 @@ public class MainActivity extends Activity {
         urlInput.setText(config.aiBaseUrl);
         applyDarkInput(urlInput);
         container.addView(urlInput);
+
+        launchApiBtn.setOnClickListener(v -> {
+            String baseUrl = normalizeBaseUrl(urlInput.getText().toString());
+            openLlmTesterOrStore(baseUrl.isEmpty() ? DEFAULT_AI_BASE_URL : baseUrl);
+        });
+        checkAndUpdateApiStatus(normalizeBaseUrl(config.aiBaseUrl), apiStatusView);
 
         final String[] selectedModel = new String[]{config.aiModel};
         TextView modelView = new TextView(this);
@@ -870,6 +892,7 @@ public class MainActivity extends Activity {
                 showStatusMessage("URLを入力してください");
                 return;
             }
+            checkAndUpdateApiStatus(baseUrl, apiStatusView);
             loadModelsAndShowChooser(baseUrl, selectedModel, modelView);
         });
         container.addView(modelSelectBtn);
@@ -930,16 +953,6 @@ public class MainActivity extends Activity {
                 .setCustomTitle(createGreenDialogTitle(getPlayerLabel(player) + "の設定"))
                 .setView(scrollView)
                 .setPositiveButton("保存", (dialog, which) -> {
-                    if (aiSwitch.isChecked()) {
-                        if (config.mode != MODE_AI) {
-                            config.savedNonAiMode = config.mode;
-                        }
-                        config.mode = MODE_AI;
-                    } else {
-                        if (config.mode == MODE_AI) {
-                            config.mode = (config.savedNonAiMode != MODE_AI) ? config.savedNonAiMode : MODE_HUMAN;
-                        }
-                    }
                     config.cpuDepth = selectedDepth[0];
                     String baseUrl = normalizeBaseUrl(urlInput.getText().toString());
                     config.aiBaseUrl = baseUrl.isEmpty() ? DEFAULT_AI_BASE_URL : baseUrl;
@@ -2139,6 +2152,68 @@ public class MainActivity extends Activity {
         int inset = dp(6);
         drawable.setLayerInset(1, inset, inset, inset, inset);
         return drawable;
+    }
+
+    private void openLlmTesterOrStore(String baseUrl) {
+        Intent launchIntent = getPackageManager().getLaunchIntentForPackage(LLM_TESTER_PACKAGE);
+        if (launchIntent == null) {
+            openLlmTesterPlayStore();
+            return;
+        }
+        try {
+            Intent serviceIntent = new Intent();
+            serviceIntent.setClassName(LLM_TESTER_PACKAGE, LLM_TESTER_SERVICE_CLASS);
+            serviceIntent.setAction(LLM_TESTER_SERVICE_ACTION_START);
+            if (baseUrl != null && !baseUrl.isEmpty()) {
+                try {
+                    Uri uri = Uri.parse(baseUrl);
+                    int port = uri.getPort();
+                    serviceIntent.putExtra("port", port > 0 ? port : 11434);
+                } catch (Exception ignored) {}
+            }
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent);
+                } else {
+                    startService(serviceIntent);
+                }
+            } catch (Exception ignored) {}
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(launchIntent);
+        } catch (ActivityNotFoundException e) {
+            openLlmTesterPlayStore();
+        }
+    }
+
+    private void openLlmTesterPlayStore() {
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(LLM_TESTER_PLAY_STORE_URL));
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            showStatusMessage("Google Playを開けませんでした");
+        }
+    }
+
+    private void checkAndUpdateApiStatus(String baseUrl, TextView statusView) {
+        if (statusView == null || baseUrl == null || baseUrl.isEmpty()) return;
+        new Thread(() -> {
+            boolean available = false;
+            try {
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
+                        new java.net.URL(baseUrl + "/api/tags").openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                available = conn.getResponseCode() < 400;
+                conn.disconnect();
+            } catch (Exception ignored) {}
+            final boolean isAvailable = available;
+            runOnUiThread(() -> {
+                statusView.setText(isAvailable ? API_STATUS_AVAILABLE_TEXT : API_STATUS_UNAVAILABLE_TEXT);
+                ((GradientDrawable) statusView.getBackground()).setColor(
+                        isAvailable ? API_STATUS_AVAILABLE_BG : API_STATUS_UNAVAILABLE_BG);
+            });
+        }).start();
     }
 
     private void showGameResult() {
