@@ -134,6 +134,9 @@ public class MainActivity extends Activity {
     private boolean isMoveAnimating;
     private boolean gameStarted = false;
     private int boardLayoutSize = -1;
+    // 対局セッションの世代番号。リセット/対局開始のたびに加算し、
+    // 進行中のバックグラウンドスレッド(AI/CPU思考)の結果を無効化するために使う。
+    private volatile int gameGeneration = 0;
 
     private PlayerConfig blackConfig;
     private PlayerConfig whiteConfig;
@@ -802,6 +805,8 @@ public class MainActivity extends Activity {
     }
 
     private void resetGame() {
+        // 進行中のAI/CPU思考スレッドの結果を無効化する
+        gameGeneration++;
         gameStarted = false;
         initBoard();
         clearMoveComments();
@@ -1107,6 +1112,8 @@ public class MainActivity extends Activity {
     }
 
     private void startGame() {
+        // 前セッションから残っている思考スレッドの結果を無効化してから開始する
+        gameGeneration++;
         gameStarted = true;
         updateControlPanel();
         handleTurn();
@@ -1164,9 +1171,12 @@ public class MainActivity extends Activity {
         setThinkingStatus(getPlayerLabel(player) + " CPU 思考中...");
         updateBoardUI();
 
+        final int generation = gameGeneration;
         new Thread(() -> {
             CpuMoveEvaluation best = findBestMoveEvaluation(player, config.cpuDepth);
             runOnUiThread(() -> {
+                // リセット/再開でセッションが切り替わっていたら結果を破棄する
+                if (generation != gameGeneration) return;
                 if (best != null) {
                     MoveResult moveResult = placeStone(best.x, best.y, player);
                     String moveCode = toMoveCode(best.x, best.y);
@@ -1221,15 +1231,21 @@ public class MainActivity extends Activity {
         final String promptWithBoard = buildPromptWithBoardAndCandidates(basePrompt, player, board, legalCandidates);
         final Set<String> legalCandidateSet = new HashSet<>(legalCandidates);
 
+        final int generation = gameGeneration;
         new Thread(() -> {
             AiMoveSelection selectedMove = null;
             String error = null;
             boolean connectionErrorOccurred = false;
 
             for (int i = 0; i < maxRetries; i++) {
+                // リセット/再開でセッションが切り替わっていたら以降の試行は無駄なので打ち切る
+                if (generation != gameGeneration) return;
                 final int attempt = i + 1;
-                runOnUiThread(() -> setThinkingStatus(
-                        getPlayerLabel(player) + " AI 思考中... (試行 " + attempt + "/" + maxRetries + ")"));
+                runOnUiThread(() -> {
+                    if (generation != gameGeneration) return;
+                    setThinkingStatus(
+                        getPlayerLabel(player) + " AI 思考中... (試行 " + attempt + "/" + maxRetries + ")");
+                });
                 try {
                     String response = requestAiMoveText(baseUrl, model, promptWithBoard, config.aiTimeoutSec * 1000);
                     logAiInteraction(player, promptWithBoard, response, null);
@@ -1267,6 +1283,8 @@ public class MainActivity extends Activity {
             final boolean isConnectionError = connectionErrorOccurred;
 
             runOnUiThread(() -> {
+                // リセット/再開でセッションが切り替わっていたら結果を破棄する
+                if (generation != gameGeneration) return;
                 if (resultMove != null) {
                     MoveResult moveResult = placeStone(resultMove.x, resultMove.y, player);
                     playMoveAnimation(moveResult, () -> {
