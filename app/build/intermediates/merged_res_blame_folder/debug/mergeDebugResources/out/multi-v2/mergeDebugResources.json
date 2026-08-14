@@ -1,0 +1,36 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.micklab.reversy.app-debug-4:/values_values.arsc.flat",
+            "map": [
+                {
+                    "source": "/root/reversy/app/src/main/res/values/ic_launcher_background.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "56",
+                        "endOffsets": "107"
+                    }
+                },
+                {
+                    "source": "/root/reversy/app/src/main/res/values/strings.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "52",
+                        "endOffsets": "103"
+                    },
+                    "to": {
+                        "startLines": "3",
+                        "startColumns": "4",
+                        "startOffsets": "112",
+                        "endColumns": "52",
+                        "endOffsets": "160"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -109,6 +109,19 @@ public class MainActivity extends Activity {
             "- 座標は「行ラベル + 列番号」の A1〜H8 形式にする。\n" +
             "- 余計な説明は書かない。";
 
+    private static final String AI_RESPONSE_FORMAT_PROMPT_JSON =
+            "\n\n【回答形式の再確認】\n" +
+            "- 必ず JSON 形式で回答すること: {\"move\": \"A1\", \"reason\": \"理由\"}\n" +
+            "- move には選んだ座標を A1〜H8 形式で1つだけ書く。\n" +
+            "- reason にはその選択理由を日本語で書く。\n" +
+            "- JSON 以外の文字は出力しない。";
+
+    private static final String GBNF_MOVE_GRAMMAR =
+            "root ::= \"{\" ws \"\\\"move\\\"\" ws \":\" ws move-value ws \",\" ws \"\\\"reason\\\"\" ws \":\" ws string ws \"}\"\n" +
+            "move-value ::= \"\\\"\" [A-Ha-h] [1-8] \"\\\"\"\n" +
+            "string ::= \"\\\"\" [^\"]* \"\\\"\"\n" +
+            "ws ::= [ \\t\\n\\r]*";
+
     private static final Pattern AI_MOVE_PATTERN = Pattern.compile(
             "(?<![A-Z0-9])([A-H][1-8])(?![A-Z0-9])",
             Pattern.CASE_INSENSITIVE);
@@ -150,6 +163,7 @@ public class MainActivity extends Activity {
         String aiPrompt;
         int aiTimeoutSec;
         int aiMaxRetries;
+        boolean aiUseGbnf;
     }
 
     private static class AiLogEntry {
@@ -735,6 +749,7 @@ public class MainActivity extends Activity {
         config.aiPrompt = buildDefaultAiPromptForPlayer(player);
         config.aiTimeoutSec = 180;
         config.aiMaxRetries = 10;
+        config.aiUseGbnf = false;
         return config;
     }
 
@@ -940,6 +955,20 @@ public class MainActivity extends Activity {
         applyDarkInput(retriesInput);
         container.addView(retriesInput);
 
+        final boolean[] useGbnf = {config.aiUseGbnf};
+        Button gbnfBtn = new Button(this);
+        gbnfBtn.setText(useGbnf[0] ? "出力形式: JSON (GBNF)" : "出力形式: プレーンテキスト");
+        applyDarkButton(gbnfBtn);
+        gbnfBtn.setOnClickListener(v -> {
+            useGbnf[0] = !useGbnf[0];
+            gbnfBtn.setText(useGbnf[0] ? "出力形式: JSON (GBNF)" : "出力形式: プレーンテキスト");
+        });
+        LinearLayout.LayoutParams gbnfParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        gbnfParams.topMargin = dp(10);
+        container.addView(gbnfBtn, gbnfParams);
+
         Button logBtn = new Button(this);
         logBtn.setText(getPlayerLabel(player) + "AIログ");
         applyDarkButton(logBtn);
@@ -979,6 +1008,7 @@ public class MainActivity extends Activity {
                     } catch (NumberFormatException e) {
                         config.aiMaxRetries = 10;
                     }
+                    config.aiUseGbnf = useGbnf[0];
                     resetGame();
                     showStatusMessage(getPlayerLabel(player) + "の設定を保存しました");
                 })
@@ -990,6 +1020,7 @@ public class MainActivity extends Activity {
                     config.aiPrompt = defaults.aiPrompt;
                     config.aiTimeoutSec = defaults.aiTimeoutSec;
                     config.aiMaxRetries = defaults.aiMaxRetries;
+                    config.aiUseGbnf = defaults.aiUseGbnf;
                     showStatusMessage(getPlayerLabel(player) + "の設定を初期化しました");
                 })
                 .setNegativeButton("キャンセル", null)
@@ -1228,7 +1259,7 @@ public class MainActivity extends Activity {
         final String basePrompt = (config.aiPrompt == null || config.aiPrompt.trim().isEmpty())
                 ? buildDefaultAiPromptForPlayer(player)
                 : config.aiPrompt;
-        final String promptWithBoard = buildPromptWithBoardAndCandidates(basePrompt, player, board, legalCandidates);
+        final String promptWithBoard = buildPromptWithBoardAndCandidates(basePrompt, player, board, legalCandidates, config.aiUseGbnf);
         final Set<String> legalCandidateSet = new HashSet<>(legalCandidates);
 
         final int generation = gameGeneration;
@@ -1247,7 +1278,7 @@ public class MainActivity extends Activity {
                         getPlayerLabel(player) + " AI 思考中... (試行 " + attempt + "/" + maxRetries + ")");
                 });
                 try {
-                    String response = requestAiMoveText(baseUrl, model, promptWithBoard, config.aiTimeoutSec * 1000);
+                    String response = requestAiMoveText(baseUrl, model, promptWithBoard, config.aiTimeoutSec * 1000, config.aiUseGbnf);
                     logAiInteraction(player, promptWithBoard, response, null);
                     connectionErrorOccurred = false;
                     AiMoveSelection parsed = parseAiMove(response);
@@ -1312,7 +1343,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private String requestAiMoveText(String baseUrl, String model, String prompt, int readTimeoutMs) throws Exception {
+    private String requestAiMoveText(String baseUrl, String model, String prompt, int readTimeoutMs, boolean useGbnf) throws Exception {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(baseUrl + "/api/generate").openConnection();
@@ -1326,6 +1357,9 @@ public class MainActivity extends Activity {
             req.put("model", model);
             req.put("prompt", prompt);
             req.put("stream", false);
+            if (useGbnf) {
+                req.put("grammar", GBNF_MOVE_GRAMMAR);
+            }
 
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(req.toString().getBytes(StandardCharsets.UTF_8));
@@ -1363,6 +1397,10 @@ public class MainActivity extends Activity {
             return AiMoveSelection.pass();
         }
 
+        // JSON形式（GBNFモード）を先に試みる
+        AiMoveSelection jsonResult = tryParseJsonMove(normalized);
+        if (jsonResult != null) return jsonResult;
+
         String[] lines = normalized.split("\n", 3);
         if (lines.length == 0) return null;
 
@@ -1379,6 +1417,32 @@ public class MainActivity extends Activity {
         }
 
         return new AiMoveSelection(x, y, moveCode, reason, false);
+    }
+
+    private AiMoveSelection tryParseJsonMove(String text) {
+        try {
+            String json = text;
+            if (json.startsWith("```")) {
+                int start = json.indexOf('\n');
+                int end = json.lastIndexOf("```");
+                if (start >= 0 && end > start) {
+                    json = json.substring(start + 1, end).trim();
+                }
+            }
+            JSONObject obj = new JSONObject(json);
+            String moveCode = obj.optString("move", "").trim().toUpperCase(Locale.US);
+            if (moveCode.length() == 2) {
+                char row = moveCode.charAt(0);
+                char col = moveCode.charAt(1);
+                if (row >= 'A' && row <= 'H' && col >= '1' && col <= '8') {
+                    int y = row - 'A';
+                    int x = col - '1';
+                    String reason = obj.optString("reason", "").trim();
+                    return new AiMoveSelection(x, y, moveCode, reason, false);
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     private String boardToText(int[][] b) {
@@ -1398,7 +1462,7 @@ public class MainActivity extends Activity {
         return sb.toString();
     }
 
-    private String buildPromptWithBoardAndCandidates(String basePrompt, int player, int[][] b, List<String> candidates) {
+    private String buildPromptWithBoardAndCandidates(String basePrompt, int player, int[][] b, List<String> candidates, boolean useGbnf) {
         StringBuilder sb = new StringBuilder(basePrompt);
         sb.append("\n\n担当色:\n");
         sb.append("- あなたは ").append(getPlayerLabel(player))
@@ -1416,7 +1480,7 @@ public class MainActivity extends Activity {
             }
         }
         sb.append("\n\n2行目では、返せる枚数・相手の合法手数・次に狙える手や角への影響も可能な範囲で入れること。");
-        sb.append(AI_RESPONSE_FORMAT_PROMPT);
+        sb.append(useGbnf ? AI_RESPONSE_FORMAT_PROMPT_JSON : AI_RESPONSE_FORMAT_PROMPT);
         return sb.toString();
     }
 

@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace "com.micklab.reversy"
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.micklab.reversy"
         minSdk 24
-        targetSdk 35
+        targetSdk 36
         def githubRunNumber = System.getenv("GITHUB_RUN_NUMBER") ?: "1"
         versionCode Integer.parseInt(githubRunNumber)
         versionName "1.${githubRunNumber}"
@@ -26,7 +26,8 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
     }
